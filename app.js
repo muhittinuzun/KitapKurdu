@@ -2155,62 +2155,21 @@ function openAddBookModal() {
 
 async function fetchLibraryBooks() {
     try {
-        const editionsRes = await apiCall({
-            action: 'read',
-            resource: 'k_t_book_editions',
-            data: {
-                fields: ['isbn', 'book_id', 'page_count', 'thumbnail_url'],
-                order: 'isbn DESC',
-                limit: 24
-            }
-        });
         const grid = document.getElementById('library-books-grid');
         if (!grid) return;
 
-        grid.innerHTML = ''; // clear skeleton
-        const editions = normalizeApiDataArray(editionsRes);
+        const res = await apiCall({
+            action: 'get_library_books',
+            data: { limit: 24 }
+        });
 
-        if (editions.length === 0) {
+        grid.innerHTML = ''; // Clear skeleton
+        const books = normalizeApiDataArray(res);
+
+        if (books.length === 0) {
             grid.innerHTML = '<div class="col-span-full text-center text-gray-500 py-6">Henüz kitap eklenmemiş.</div>';
             return;
         }
-
-        const books = await Promise.all(editions.map(async (edition) => {
-            let title = 'İsimsiz Kitap';
-            let author = 'Bilinmeyen Yazar';
-            let category = 'Diğer';
-
-            if (edition.book_id) {
-                try {
-                    const bookRes = await apiCall({
-                        action: 'read',
-                        resource: 'k_t_books',
-                        data: {
-                            fields: ['id', 'title', 'author', 'category'],
-                            filters: { id: edition.book_id },
-                            limit: 1
-                        }
-                    });
-                    const rows = normalizeApiDataArray(bookRes);
-                    if (rows.length > 0) {
-                        title = rows[0].title || title;
-                        author = rows[0].author || author;
-                        category = rows[0].category || category;
-                    }
-                } catch (err) {
-                    console.error('Library book detail load error:', err);
-                }
-            }
-
-            return {
-                isbn: edition.isbn || '',
-                page_count: Number(edition.page_count) || 0,
-                thumbnail_url: edition.thumbnail_url || '',
-                title,
-                author,
-                category
-            };
-        }));
 
         books.forEach((b) => {
             const safeTitle = String(b.title || '').replace(/'/g, "\\'");
