@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="tr" class="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Kitap Ligi</title>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        child: {
+                            primary: '#f59e0b', // Amber 500
+                            secondary: '#6366f1', // Indigo 500
+                            bg: '#fffbeb', // Amber 50
+                            card: '#ffffff'
+                        },
+                        academic: {
+                            primary: '#475569', // Slate 600
+                            secondary: '#4f46e5', // Indigo 600
+                            bg: '#f8fafc', // Slate 50
+                            card: '#ffffff'
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        display: ['Outfit', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
+
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="style.css">
+
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <!-- Canvas Confetti -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+</head>
+<body class="bg-gray-50 text-gray-900 antialiased font-sans transition-colors duration-300" id="app-body">
+    
+    <!-- Main App Container -->
+    <div id="app" class="flex h-screen overflow-hidden">
+        
+        <!-- Sidebar (Desktop only) -->
+        <aside id="desktop-sidebar" class="hidden md:flex flex-col w-64 bg-white border-r border-gray-200 z-20 transition-all shadow-sm">
+            <div class="h-16 flex items-center px-6 border-b border-gray-100">
+                <i data-lucide="book-open" class="text-child-primary mr-3 h-8 w-8"></i>
+                <span class="text-xl font-display font-bold text-gray-800 tracking-tight">Kitap Ligi</span>
+            </div>
+            
+            <div class="flex-1 overflow-y-auto py-6 px-4">
+                <nav class="space-y-1" id="desktop-nav-links">
+                    <!-- Nav links injected via JS -->
+                </nav>
+            </div>
+            
+            <div class="p-4 border-t border-gray-100" id="desktop-user-menu">
+                <!-- User menu injected via JS -->
+            </div>
+        </aside>
+
+        <!-- Main Content Area -->
+        <div class="flex-1 flex flex-col h-full overflow-hidden relative w-full">
+            
+            <!-- Top Header (Mobile & Desktop) -->
+            <header class="h-16 bg-white/80 backdrop-blur-md border-b border-gray-200 flex items-center justify-between px-4 sm:px-6 z-10 shadow-sm sticky top-0">
+                <div class="flex items-center md:hidden">
+                    <i data-lucide="book-open" class="text-child-primary mr-2 h-6 w-6"></i>
+                    <span class="text-lg font-display font-bold text-gray-800">Kitap Ligi</span>
+                </div>
+                
+                <div class="hidden md:flex flex-1 items-center justify-between">
+                    <h1 id="page-title" class="text-xl font-display font-semibold text-gray-800">Ana Sayfa</h1>
+                </div>
+
+                <div class="flex items-center space-x-3">
+                    <button id="theme-toggle" class="p-2 rounded-full hover:bg-gray-100 transition-colors text-gray-500" aria-label="Temayı Değiştir">
+                        <i data-lucide="moon" class="h-5 w-5 hidden" id="icon-moon"></i>
+                        <i data-lucide="sun" class="h-5 w-5 hidden" id="icon-sun"></i>
+                        <i data-lucide="graduation-cap" class="h-5 w-5" id="icon-academic" title="Akademik Mod"></i>
+                    </button>
+                    <!-- Notification Bell -->
+                    <button class="p-2 rounded-full hover:bg-gray-100 transition-colors text-gray-500 relative">
+                        <i data-lucide="bell" class="h-5 w-5"></i>
+                        <span class="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full border-2 border-white hidden" id="notification-badge"></span>
+                    </button>
+                </div>
+            </header>
+
+            <!-- Page Content (Scrollable) -->
+            <main class="flex-1 overflow-y-auto pb-20 md:pb-6 p-4 sm:p-6 lg:p-8 scroll-smooth" id="main-content">
+                <div id="inline-alert-container" class="hidden w-full max-w-7xl mx-auto mb-4"></div>
+                <!-- Loading State -->
+                <div class="flex items-center justify-center h-full" id="global-loader">
+                    <div class="animate-spin rounded-full h-12 w-12 border-4 border-gray-200 border-t-child-primary"></div>
+                </div>
+
+                <!-- View Container -->
+                <div id="view-container" class="hidden w-full max-w-7xl mx-auto space-y-6">
+                    <!-- Views injected here by JS -->
+                </div>
+            </main>
+        </div>
+
+        <!-- Bottom Navigation (Mobile only) -->
+        <nav id="mobile-bottom-nav" class="md:hidden fixed bottom-0 w-full bg-white/90 backdrop-blur-lg border-t border-gray-200 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-30 pb-safe">
+            <div class="flex justify-around items-center h-16 px-2" id="mobile-nav-links">
+                <!-- Nav links injected via JS -->
+            </div>
+        </nav>
+
+        <!-- Toasts/Notifications Container -->
+        <div id="toast-container" class="fixed top-20 right-4 z-50 flex flex-col space-y-2 pointer-events-none"></div>
+
+    </div>
+
+    <!-- App Logic -->
+    <script src="app.js"></script>
+</body>
+</html>
