@@ -108,3 +108,10 @@ body.dark .glass {
     width: 100%;
     min-height: 250px;
 }
+
+/* Mobilde sol sidebar tamamen kapalı, alt menü aktif */
+@media (max-width: 767px) {
+    #desktop-sidebar {
+        display: none !important;
+    }
+}
