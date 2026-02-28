@@ -1737,8 +1737,8 @@ async function renderBadgesView(container) {
                             Kilitli rozet kalmadı. Hepsini tamamladın, harikasın!
                         </div>
                     ` : nextTargets.map((badge) => {
-                        const theme = getBadgeTheme(badge);
-                        return `
+        const theme = getBadgeTheme(badge);
+        return `
                         <div class="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 min-h-[220px] flex flex-col">
                             <div class="flex items-start justify-between">
                                 <div class="w-16 h-16 rounded-2xl ${theme.lockedIconWrap} flex items-center justify-center">
@@ -1753,7 +1753,7 @@ async function renderBadgesView(container) {
                             </div>
                         </div>
                     `;
-                    }).join('')}
+    }).join('')}
                 </div>
             </div>
 
@@ -1767,8 +1767,8 @@ async function renderBadgesView(container) {
                             Henüz rozet kazanmadın. Okudukça hazine sandığın dolacak.
                         </div>
                     ` : earned.map((badge) => {
-                        const theme = getBadgeTheme(badge);
-                        return `
+        const theme = getBadgeTheme(badge);
+        return `
                         <div class="rounded-2xl p-5 shadow-md border text-white min-h-[220px] flex flex-col ${theme.card}">
                             <div class="flex items-start justify-between">
                                 <div class="w-16 h-16 rounded-2xl ${theme.iconWrap} flex items-center justify-center shadow-inner">
@@ -1785,7 +1785,7 @@ async function renderBadgesView(container) {
                             </div>
                         </div>
                     `;
-                    }).join('')}
+    }).join('')}
                 </div>
             </div>
         </div>
@@ -1830,8 +1830,8 @@ async function renderLibraryView(container) {
 
         <!-- Add Book Modal -->
         <div id="add-book-modal" class="fixed inset-0 z-50 bg-gray-900/50 backdrop-blur-sm hidden flex items-center justify-center p-4">
-            <div class="bg-white rounded-3xl shadow-xl w-full max-w-lg overflow-hidden animate-slide-up">
-                <div class="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+            <div class="bg-white rounded-3xl shadow-xl w-full max-w-lg overflow-y-auto animate-slide-up max-h-[90vh]">
+                <div class="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-white sticky top-0 z-10">
                     <h3 class="font-bold text-lg text-gray-800">Sisteme Kitap Ekle</h3>
                     <button onclick="closeAddBookModal()" class="text-gray-400 hover:text-gray-600 p-1">
                         <i data-lucide="x" class="w-5 h-5"></i>
