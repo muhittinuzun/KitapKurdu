@@ -1830,20 +1830,20 @@ async function renderLibraryView(container) {
 
         <!-- Add Book Modal -->
         <div id="add-book-modal" class="fixed inset-0 z-50 bg-gray-900/50 backdrop-blur-sm hidden flex items-center justify-center p-4">
-            <div class="bg-white rounded-3xl shadow-xl w-full max-w-md overflow-hidden animate-slide-up">
+            <div class="bg-white rounded-3xl shadow-xl w-full max-w-lg overflow-hidden animate-slide-up">
                 <div class="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
                     <h3 class="font-bold text-lg text-gray-800">Sisteme Kitap Ekle</h3>
                     <button onclick="closeAddBookModal()" class="text-gray-400 hover:text-gray-600 p-1">
                         <i data-lucide="x" class="w-5 h-5"></i>
                     </button>
                 </div>
-                <div class="p-6">
-                    <form id="add-book-form" class="space-y-4">
-                        <div class="rounded-2xl border border-indigo-100 bg-indigo-50/60 p-4">
+                <div class="p-6 space-y-6">
+                    <form id="add-book-form" class="space-y-6">
+                        <div class="rounded-3xl border border-indigo-100 bg-indigo-50/70 p-5 shadow-sm">
                             <label class="block text-sm font-bold text-indigo-900 mb-2">
                                 ISBN Barkod Okut
                             </label>
-                            <button type="button" id="start-isbn-scan-btn" class="w-full py-2.5 rounded-xl bg-indigo-600 text-white font-semibold hover:bg-indigo-700 transition-colors flex items-center justify-center">
+                            <button type="button" id="start-isbn-scan-btn" class="w-full py-3.5 rounded-2xl bg-indigo-600 text-white font-bold hover:bg-indigo-700 transition-colors flex items-center justify-center shadow-sm">
                                 <i data-lucide="scan-line" class="w-4 h-4 mr-2"></i> Kamerayı Aç
                             </button>
                             <div id="barcode-scanner-container" class="hidden mt-3 w-full rounded-xl border border-indigo-200 overflow-hidden bg-white">
@@ -1852,22 +1852,22 @@ async function renderLibraryView(container) {
                             </div>
                         </div>
 
-                        <div>
+                        <div class="rounded-3xl border border-amber-100 bg-amber-50/60 p-5 shadow-sm">
                             <label class="block text-sm font-bold text-gray-800 mb-2">Manuel ISBN Gir</label>
-                            <div class="flex gap-2">
-                                <input type="text" id="new-book-isbn" required class="flex-1 px-3 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-child-primary bg-gray-50" placeholder="Örn: 9781234567890">
-                                <button type="submit" class="px-4 rounded-xl bg-child-primary text-white font-semibold hover:bg-amber-600 transition-colors">Getir</button>
-                            </div>
+                            <input type="text" id="new-book-isbn" required class="w-full px-4 py-3.5 text-lg font-semibold tracking-wide border border-amber-200 rounded-2xl focus:ring-4 focus:ring-amber-100 focus:border-amber-400 bg-white shadow-inner" placeholder="Örn: 9781234567890">
+                            <button type="submit" class="w-full mt-3 py-3.5 rounded-2xl bg-child-primary text-white font-bold hover:bg-amber-600 transition-colors flex items-center justify-center shadow-sm">
+                                <i data-lucide="search" class="w-5 h-5 mr-2"></i> ISBN ile Getir
+                            </button>
                             <p class="text-xs text-gray-500 mt-2">Kitap bilgisi önce doğrulanır, sonra onayınla kitaplığa eklenir.</p>
                         </div>
                     </form>
 
-                    <div id="isbn-fetch-loader" class="hidden mt-4 rounded-2xl border border-indigo-100 bg-indigo-50/70 p-4 flex items-center">
-                        <div class="animate-spin rounded-full h-5 w-5 border-2 border-indigo-200 border-t-indigo-600 mr-3"></div>
-                        <p class="text-sm font-semibold text-indigo-900">Aranıyor...</p>
+                    <div id="isbn-fetch-loader" class="hidden rounded-3xl border border-indigo-100 bg-indigo-50/80 p-5 flex items-center shadow-sm">
+                        <div class="animate-spin rounded-full h-6 w-6 border-2 border-indigo-200 border-t-indigo-600 mr-3"></div>
+                        <p class="text-sm font-bold text-indigo-900">Aranıyor...</p>
                     </div>
 
-                    <div id="book-confirm-card" class="hidden mt-5 rounded-2xl border border-emerald-100 bg-emerald-50/40 p-4"></div>
+                    <div id="book-confirm-card" class="hidden rounded-3xl border border-emerald-200 bg-emerald-50/80 p-5 shadow-md"></div>
                 </div>
             </div>
         </div>
@@ -2009,36 +2009,41 @@ function renderBookConfirmationCard() {
 
     card.classList.remove('hidden');
     card.innerHTML = `
-        <h4 class="font-bold text-emerald-900 flex items-center">
-            <i data-lucide="shield-check" class="w-4 h-4 mr-2"></i> Kitap Bilgisi Onayı
+        <h4 class="font-bold text-emerald-900 flex items-center text-base">
+            <i data-lucide="sparkles" class="w-4 h-4 mr-2"></i> Kitap Bilgisi Onayı
         </h4>
-        <div class="mt-3 flex gap-3">
-            <div class="w-20 h-28 rounded-xl overflow-hidden border border-emerald-100 bg-white shrink-0">
+        <div class="mt-4 flex gap-4">
+            <div class="w-24 h-32 rounded-2xl overflow-hidden border border-emerald-100 bg-white shrink-0 shadow-sm">
                 ${buildBookCoverHtml(pending.thumbnail_url, pending.title)}
             </div>
             <div class="flex-1">
-                <p class="font-bold text-gray-900 leading-tight">${escapeHtml(pending.title)}</p>
+                <p class="font-bold text-gray-900 leading-tight text-lg">${escapeHtml(pending.title)}</p>
                 <p class="text-sm text-gray-600 mt-1">${escapeHtml(pending.author)}</p>
-                <p class="text-xs text-gray-500 mt-2">${pending.page_count || 0} sayfa</p>
+                <p class="text-xs text-gray-500 mt-2 inline-flex items-center bg-white/80 border border-emerald-100 px-2 py-1 rounded-full">${pending.page_count || 0} sayfa</p>
             </div>
         </div>
         <div class="mt-4">
             <label class="block text-xs font-bold text-gray-700 mb-1">Kategori</label>
-            <select id="confirm-book-category" class="w-full px-3 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-200 bg-white text-sm">
-                <option value="Roman" ${pending.category === 'Roman' ? 'selected' : ''}>Roman</option>
-                <option value="Tarih" ${pending.category === 'Tarih' ? 'selected' : ''}>Tarih</option>
-                <option value="Bilim" ${pending.category === 'Bilim' ? 'selected' : ''}>Bilim</option>
-                <option value="Hikaye" ${pending.category === 'Hikaye' ? 'selected' : ''}>Hikaye</option>
-                <option value="Diğer" ${pending.category === 'Diğer' ? 'selected' : ''}>Diğer</option>
-            </select>
+            <div class="relative">
+                <select id="confirm-book-category" class="appearance-none w-full px-4 py-3 border border-emerald-200 rounded-2xl focus:ring-4 focus:ring-emerald-100 focus:border-emerald-400 bg-white text-sm font-medium shadow-sm">
+                    <option value="Roman" ${pending.category === 'Roman' ? 'selected' : ''}>Roman</option>
+                    <option value="Tarih" ${pending.category === 'Tarih' ? 'selected' : ''}>Tarih</option>
+                    <option value="Bilim" ${pending.category === 'Bilim' ? 'selected' : ''}>Bilim</option>
+                    <option value="Hikaye" ${pending.category === 'Hikaye' ? 'selected' : ''}>Hikaye</option>
+                    <option value="Diğer" ${pending.category === 'Diğer' ? 'selected' : ''}>Diğer</option>
+                </select>
+                <i data-lucide="chevrons-up-down" class="w-4 h-4 text-emerald-500 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none"></i>
+            </div>
         </div>
-        <div class="grid grid-cols-2 gap-2 mt-4">
-            <button id="confirm-add-book-btn" class="py-2.5 rounded-xl bg-emerald-600 text-white font-semibold hover:bg-emerald-700 transition-colors">
+        <div class="mt-5">
+            <button id="confirm-add-book-btn" class="w-full py-3.5 rounded-2xl bg-emerald-500 text-white font-bold hover:bg-emerald-600 transition-colors shadow-md flex items-center justify-center">
+                <i data-lucide="check-circle" class="w-5 h-5 mr-2"></i>
                 Evet, Kitaplığıma Ekle
             </button>
-            <button id="retry-scan-btn" class="py-2.5 rounded-xl bg-white border border-gray-200 text-gray-700 font-semibold hover:bg-gray-50 transition-colors">
-                Tekrar Tara
-            </button>
+            <div class="flex items-center justify-center gap-4 mt-3">
+                <button id="retry-scan-btn" class="text-sm font-semibold text-indigo-600 hover:text-indigo-800 underline underline-offset-2">Tekrar Tara</button>
+                <button id="cancel-confirm-book-btn" class="text-sm font-semibold text-gray-500 hover:text-gray-700">İptal</button>
+            </div>
         </div>
     `;
     lucide.createIcons({ root: card });
@@ -2056,6 +2061,13 @@ function renderBookConfirmationCard() {
             card.classList.add('hidden');
             AppState.data.pendingIsbnBook = null;
             await startBarcodeScanner();
+        });
+    }
+    const cancelBtn = document.getElementById('cancel-confirm-book-btn');
+    if (cancelBtn) {
+        cancelBtn.addEventListener('click', () => {
+            card.classList.add('hidden');
+            AppState.data.pendingIsbnBook = null;
         });
     }
 }
