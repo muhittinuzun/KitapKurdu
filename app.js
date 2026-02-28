@@ -1602,6 +1602,36 @@ async function renderBadgesView(container) {
 
     const earned = data.badges.filter((b) => b.earned);
     const locked = data.badges.filter((b) => !b.earned);
+    const badgeThemesByType = {
+        total_pages: {
+            card: 'bg-gradient-to-br from-sky-500 via-blue-500 to-indigo-600 border-blue-300',
+            iconWrap: 'bg-white/25 text-white',
+            lockedIconWrap: 'bg-blue-50 text-blue-600',
+            lockedProgress: 'bg-blue-500'
+        },
+        read_streak: {
+            card: 'bg-gradient-to-br from-violet-500 via-fuchsia-500 to-pink-500 border-fuchsia-300',
+            iconWrap: 'bg-white/25 text-white',
+            lockedIconWrap: 'bg-purple-50 text-purple-600',
+            lockedProgress: 'bg-purple-500'
+        },
+        total_books: {
+            card: 'bg-gradient-to-br from-emerald-400 via-teal-400 to-cyan-500 border-emerald-300',
+            iconWrap: 'bg-white/30 text-white',
+            lockedIconWrap: 'bg-emerald-50 text-emerald-600',
+            lockedProgress: 'bg-emerald-500'
+        },
+        default: {
+            card: 'bg-gradient-to-br from-amber-400 via-orange-400 to-rose-500 border-orange-300',
+            iconWrap: 'bg-white/30 text-white',
+            lockedIconWrap: 'bg-gray-100 text-gray-500',
+            lockedProgress: 'bg-indigo-500'
+        }
+    };
+
+    function getBadgeTheme(badge) {
+        return badgeThemesByType[badge.requirement_type] || badgeThemesByType.default;
+    }
 
     container.innerHTML = `
         <div class="space-y-6 animate-slide-up">
@@ -1624,23 +1654,31 @@ async function renderBadgesView(container) {
                 <h3 class="text-lg font-bold text-gray-800 mb-3 flex items-center">
                     <i data-lucide="award" class="w-5 h-5 mr-2 text-amber-500"></i> Kazanılan Rozetler
                 </h3>
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                     ${earned.length === 0 ? `
-                        <div class="md:col-span-2 lg:col-span-3 bg-white rounded-2xl p-5 shadow-sm border border-gray-100 text-sm text-gray-500">
+                        <div class="sm:col-span-2 lg:col-span-3 xl:col-span-4 bg-white rounded-2xl p-5 shadow-sm border border-gray-100 text-sm text-gray-500">
                             Henüz rozet kazanmadın. Okudukça rozetlerin burada görünecek.
                         </div>
-                    ` : earned.map((badge) => `
-                        <div class="bg-white rounded-2xl p-4 shadow-sm border border-green-100">
+                    ` : earned.map((badge) => {
+                        const theme = getBadgeTheme(badge);
+                        return `
+                        <div class="rounded-2xl p-5 shadow-md border text-white min-h-[220px] flex flex-col ${theme.card}">
                             <div class="flex items-start justify-between">
-                                <div class="w-10 h-10 rounded-full bg-green-100 text-green-700 flex items-center justify-center">
-                                    <i data-lucide="${badge.icon_key || 'medal'}" class="w-5 h-5"></i>
+                                <div class="w-16 h-16 rounded-2xl ${theme.iconWrap} flex items-center justify-center shadow-inner">
+                                    <i data-lucide="${badge.icon_key || 'medal'}" class="w-8 h-8"></i>
                                 </div>
-                                <span class="text-[11px] px-2 py-1 rounded-full bg-green-100 text-green-700 font-semibold">Kazanıldı</span>
+                                <span class="text-[11px] px-2 py-1 rounded-full bg-white/25 text-white font-semibold">Kazanıldı</span>
                             </div>
-                            <h4 class="font-bold text-gray-900 mt-3">${badge.name}</h4>
-                            <p class="text-xs text-gray-500 mt-1">${badge.description || ''}</p>
+                            <h4 class="font-bold text-lg mt-4 leading-tight">${badge.name}</h4>
+                            <p class="text-sm text-white/90 mt-2">${badge.description || ''}</p>
+                            <div class="mt-auto pt-4">
+                                <div class="h-1.5 w-full bg-white/30 rounded-full overflow-hidden">
+                                    <div class="h-full w-full bg-white rounded-full"></div>
+                                </div>
+                            </div>
                         </div>
-                    `).join('')}
+                    `;
+                    }).join('')}
                 </div>
             </div>
 
@@ -1648,22 +1686,25 @@ async function renderBadgesView(container) {
                 <h3 class="text-lg font-bold text-gray-800 mb-3 flex items-center">
                     <i data-lucide="lock" class="w-5 h-5 mr-2 text-gray-500"></i> Kilitli Rozetler
                 </h3>
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    ${locked.map((badge) => `
-                        <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                    ${locked.map((badge) => {
+                        const theme = getBadgeTheme(badge);
+                        return `
+                        <div class="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 min-h-[220px] flex flex-col">
                             <div class="flex items-start justify-between">
-                                <div class="w-10 h-10 rounded-full bg-gray-100 text-gray-500 flex items-center justify-center">
-                                    <i data-lucide="${badge.icon_key || 'medal'}" class="w-5 h-5"></i>
+                                <div class="w-16 h-16 rounded-2xl ${theme.lockedIconWrap} flex items-center justify-center">
+                                    <i data-lucide="${badge.icon_key || 'medal'}" class="w-8 h-8"></i>
                                 </div>
                                 <span class="text-[11px] px-2 py-1 rounded-full bg-gray-100 text-gray-600 font-semibold">${badge.current_value} / ${badge.target_value}</span>
                             </div>
-                            <h4 class="font-bold text-gray-900 mt-3">${badge.name}</h4>
-                            <p class="text-xs text-gray-500 mt-1">${badge.description || ''}</p>
-                            <div class="w-full bg-gray-100 rounded-full h-2 mt-3 overflow-hidden">
-                                <div class="bg-indigo-500 h-2 rounded-full transition-all duration-700" style="width: ${badge.progress_percent}%"></div>
+                            <h4 class="font-bold text-gray-900 text-lg mt-4 leading-tight">${badge.name}</h4>
+                            <p class="text-sm text-gray-500 mt-2">${badge.description || ''}</p>
+                            <div class="w-full bg-gray-100 rounded-full h-2 mt-auto overflow-hidden">
+                                <div class="${theme.lockedProgress} h-2 rounded-full transition-all duration-700" style="width: ${badge.progress_percent}%"></div>
                             </div>
                         </div>
-                    `).join('')}
+                    `;
+                    }).join('')}
                 </div>
             </div>
         </div>
