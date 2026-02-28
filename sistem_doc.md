@@ -15,6 +15,8 @@ Proje artık mock/prototipten gerçek MVP akışına geçmiştir.
 - Kritik ekranlar gerçek veriye bağlıdır: dashboard, kitaplarım, kütüphane, rozetler.
 - Rozet kazanımları artık sadece istemci geçici verisi değil, `k_t_user_badges` tablosuna kalıcı yazılır.
 - Mobil görünümde sol sidebar kapatılmış, alt menü ana navigasyon olarak kullanılır.
+- ISBN tabanlı kitap bulma akışı fallback mimarisi ile canlıdır: önce lokal DB, yoksa Google Books API.
+- "Sisteme Kitap Ekle" modalı premium mobil UX'e taşınmıştır (spinner, onay kartı, kategori seçimi, büyük CTA).
 
 ---
 
@@ -44,6 +46,7 @@ Proje artık mock/prototipten gerçek MVP akışına geçmiştir.
 - `index.html`
   - Uygulama iskeleti, header, içerik alanı, mobil alt menü.
   - Desktop sidebar markup içerir ama mobilde CSS ile kapatılır.
+  - `html5-qrcode` CDN entegrasyonu ile kamera tabanlı ISBN okutma desteği içerir.
 
 - `style.css`
   - Özel animasyonlar ve yardımcı stiller.
@@ -52,9 +55,12 @@ Proje artık mock/prototipten gerçek MVP akışına geçmiştir.
 - `app.js`
   - Global state (`AppState`), view render, API istemcisi, tüm etkileşimler.
   - Öğrenci/yetkili ekranları, rozet hesaplama ve senkronizasyon mantığı.
+  - Kitap ekleme modalı: ISBN arama spinner'ı, onay kartı, görsel fallback, kategori seçimi, tek-tık DB kayıt akışı.
 
 - `api_akisi.json`
-  - n8n workflow: `Webhook -> Smart SQL Builder -> Universal Executor -> Respond Success`.
+  - n8n workflow: `Webhook -> Action Yönlendirici`.
+  - `fetch_book_by_isbn` için şelale: `Lokal DB Kontrolü -> Bizde Var Mı? -> (varsa) Cevap Dön / (yoksa) Google Books API -> Format Google Data -> Cevap Dön`.
+  - Diğer aksiyonlar için klasik hat: `Smart SQL Builder -> Universal Executor -> Respond Success`.
   - Aksiyonlara göre SQL üretimi ve whitelist güvenliği.
 
 ---
@@ -95,6 +101,7 @@ Proje artık mock/prototipten gerçek MVP akışına geçmiştir.
 - `authority_stats`
 - `authority_students`
 - `sync_user_badges`
+- `fetch_book_by_isbn`
 - `read`
 
 ## 5.4 Whitelist Tabloları
@@ -106,6 +113,33 @@ Proje artık mock/prototipten gerçek MVP akışına geçmiştir.
 - `k_t_books`
 - `k_t_book_editions`
 - `k_t_user_badges`
+
+## 5.5 `fetch_book_by_isbn` Cevap Sözleşmesi
+
+Başarılı örnek:
+
+```json
+{
+  "status": "success",
+  "source": "local|google",
+  "data": {
+    "title": "string",
+    "author": "string",
+    "page_count": 0,
+    "thumbnail_url": "string",
+    "category": "string"
+  }
+}
+```
+
+Hata örneği:
+
+```json
+{
+  "status": "error",
+  "message": "Kitap bulunamadı"
+}
+```
 
 ---
 
@@ -149,7 +183,28 @@ Bu karar UX tutarlılığı için korunmalıdır; mobilde iki ayrı navigasyon k
 
 ---
 
-## 8) Şu An Güvenli Müdahale Noktaları
+## 8) Kitap Ekleme UX Standardı (MVP)
+
+Bu akış MVP için standarttır, değiştirilirken korunmalıdır:
+
+1. Kullanıcı ISBN'i manuel girer veya kamera ile okutur.
+2. Modal içinde "Aranıyor..." spinner'ı görünür.
+3. `apiCall('fetch_book_by_isbn', { isbn })` çağrılır.
+4. Başarılıysa onay kartı açılır:
+   - kapak (hotlink),
+   - kitap adı,
+   - yazar,
+   - sayfa sayısı,
+   - kategori seçimi.
+5. Görsel yüklenemezse lucide `book` placeholder gösterilir.
+6. Kullanıcı onaylarsa:
+   - `apiCall('add_book_edition', { isbn, title, author, page_count, thumbnail_url, category })`
+   - başarıda modal kapanır, toast gösterilir, kütüphane tazelenir.
+7. API hata dönerse kullanıcıya okunabilir toast mesajı verilir.
+
+---
+
+## 9) Şu An Güvenli Müdahale Noktaları
 
 Yeni geliştirme yapacak ekipler için önerilen giriş noktaları:
 
@@ -166,15 +221,20 @@ Yeni geliştirme yapacak ekipler için önerilen giriş noktaları:
    - Frontend: `loadBadgeProgressData()` ve `renderBadgesView()`
    - Backend: `sync_user_badges` SQL kural bloğu
 
+5. **ISBN fallback akışı değişecekse**
+   - `api_akisi.json` içinde `Action Yönlendirici`, `Lokal DB Kontrolü`, `Google Books API`, `Format Google Data`, `Cevap Dön` zinciri birlikte ele alınmalıdır.
+   - Sadece tek node değiştirilip bırakılmamalıdır; bağlantı bütünlüğü korunmalıdır.
+
 ---
 
-## 9) Açık Riskler ve Teknik Borç
+## 10) Açık Riskler ve Teknik Borç
 
 1. **Auth sertliği**
    - Session/token tabanlı merkezi yetkilendirme henüz yok.
 
 2. **Tarayıcı API desteği**
-   - `BarcodeDetector` ve `webkitSpeechRecognition` cihaz/tarayıcıya göre değişebilir.
+   - `html5-qrcode` kamera izinlerine ve cihaz performansına bağlıdır.
+   - `webkitSpeechRecognition` cihaz/tarayıcıya göre değişebilir.
 
 3. **Veritabanı kısıtları**
    - `k_t_user_badges` için `UNIQUE(user_id, badge_id)` indeksinin veritabanında net garanti edilmesi önerilir.
@@ -184,7 +244,7 @@ Yeni geliştirme yapacak ekipler için önerilen giriş noktaları:
 
 ---
 
-## 10) Operasyon Notu (Checkpoint Süreci)
+## 11) Operasyon Notu (Checkpoint Süreci)
 
 Bu dosya düzenli aralıklarla checkpoint olarak güncellenir.
 
