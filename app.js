@@ -2221,7 +2221,8 @@ function updateNavigationUI(role) {
         return;
     }
 
-    desktopSidebar.classList.remove('hidden');
+    // Mobilde sidebar her zaman gizli kalsın, sadece md+ ekranda görünsün.
+    desktopSidebar.classList.add('hidden');
     desktopSidebar.classList.add('md:flex');
     mobileBottomNav.classList.remove('hidden');
 
