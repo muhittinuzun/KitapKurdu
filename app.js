@@ -91,7 +91,7 @@ function saveState() {
  * Generic API Caller ensuring the format matches n8n requirements
  * fetch(url, { method: 'POST', body: JSON.stringify({ action, resource, data, user_id }) })
  */
-async function apiCall(request, legacyParams = {}, legacyData = null) {
+async function apiCall(request, legacyParams = {}) {
     let action = 'unknown';
     try {
         // Backward compatible parser: apiCall('login', {...}) or apiCall({ action, resource, data })
@@ -101,12 +101,8 @@ async function apiCall(request, legacyParams = {}, legacyData = null) {
         if (typeof request === 'string') {
             action = request;
             resource = legacyParams.resource || null;
-            if (legacyData && typeof legacyData === 'object') {
-                data = { ...legacyData };
-            } else {
-                data = { ...legacyParams };
-                delete data.resource;
-            }
+            data = { ...legacyParams };
+            delete data.resource;
         } else {
             action = request.action;
             resource = request.resource || null;
@@ -1971,7 +1967,7 @@ async function fetchBookByIsbnForConfirm(rawIsbn) {
     setIsbnFetchLoading(true);
     showToast('Kitap bilgisi getiriliyor...', 'info');
     try {
-        const res = await apiCall('fetch_book_by_isbn', null, { isbn });
+        const res = await apiCall('fetch_book_by_isbn', { isbn });
 
         let payload = res;
         if (Array.isArray(res) && res.length > 0) payload = res[0];
@@ -2075,17 +2071,13 @@ async function confirmAddBookFromPending() {
     try {
         const categorySelect = document.getElementById('confirm-book-category');
         const selectedCategory = categorySelect ? categorySelect.value : (pending.category || 'Diğer');
-        const addRes = await apiCall({
-            action: 'add_book_edition',
-            resource: 'k_t_book_editions',
-            data: {
-                isbn: pending.isbn,
-                title: pending.title,
-                author: pending.author,
-                category: selectedCategory,
-                page_count: pending.page_count,
-                thumbnail_url: pending.thumbnail_url || ''
-            }
+        const addRes = await apiCall('add_book_edition', {
+            isbn: pending.isbn,
+            title: pending.title,
+            author: pending.author,
+            page_count: pending.page_count,
+            thumbnail_url: pending.thumbnail_url || '',
+            category: selectedCategory
         });
         const createdRows = normalizeApiDataArray(addRes);
         if (createdRows.length === 0) {
