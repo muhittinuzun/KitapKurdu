@@ -14,6 +14,8 @@ const AppState = {
         groups: [],
         bookProgressMap: {},
         recentReadLogs: [],
+        pendingIsbnBook: null,
+        lastReadAction: null,
         activeBook: {
             edition_id: null,
             title: '',
@@ -89,7 +91,7 @@ function saveState() {
  * Generic API Caller ensuring the format matches n8n requirements
  * fetch(url, { method: 'POST', body: JSON.stringify({ action, resource, data, user_id }) })
  */
-async function apiCall(request, legacyParams = {}) {
+async function apiCall(request, legacyParams = {}, legacyData = null) {
     let action = 'unknown';
     try {
         // Backward compatible parser: apiCall('login', {...}) or apiCall({ action, resource, data })
@@ -99,8 +101,12 @@ async function apiCall(request, legacyParams = {}) {
         if (typeof request === 'string') {
             action = request;
             resource = legacyParams.resource || null;
-            data = { ...legacyParams };
-            delete data.resource;
+            if (legacyData && typeof legacyData === 'object') {
+                data = { ...legacyData };
+            } else {
+                data = { ...legacyParams };
+                delete data.resource;
+            }
         } else {
             action = request.action;
             resource = request.resource || null;
@@ -108,6 +114,9 @@ async function apiCall(request, legacyParams = {}) {
         }
 
         const payload = { action, resource, data };
+        if (action === 'fetch_book_by_isbn' && data.isbn) {
+            payload.isbn = data.isbn;
+        }
 
         // Inject user_id if authenticated, crucial for backend contextualization
         if (AppState.user && AppState.user.id) {
@@ -742,6 +751,34 @@ function normalizeApiDataArray(res) {
     return [];
 }
 
+function escapeHtml(value) {
+    return String(value || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function buildBookCoverHtml(thumbnailUrl, altText, classes = 'w-full h-full object-cover') {
+    const safeUrl = String(thumbnailUrl || '').trim();
+    const safeAlt = escapeHtml(altText || 'Kitap kapağı');
+    if (!safeUrl) {
+        return `
+            <div class="w-full h-full bg-slate-100 flex items-center justify-center">
+                <i data-lucide="book" class="w-10 h-10 text-slate-400"></i>
+            </div>
+        `;
+    }
+    return `
+        <img src="${escapeHtml(safeUrl)}" alt="${safeAlt}" class="${classes}" loading="lazy"
+             onerror="this.classList.add('hidden'); this.nextElementSibling.classList.remove('hidden');">
+        <div class="hidden w-full h-full bg-slate-100 flex items-center justify-center">
+            <i data-lucide="book" class="w-10 h-10 text-slate-400"></i>
+        </div>
+    `;
+}
+
 async function getGroupNameById(groupId) {
     if (!groupId) return null;
     try {
@@ -852,8 +889,11 @@ async function loadStudentActiveBook() {
 async function renderStudentDashboard(container) {
     await loadStudentActiveBook();
     let dashboardStats = { read_books_count: 0, total_pages: 0, streak_days: 0 };
+    let ongoingBooks = [];
     try {
         dashboardStats = await loadDashboardStats();
+        const allBooks = await loadMyBooksData();
+        ongoingBooks = allBooks.filter((book) => !book.finished && !book.dropped).slice(0, 12);
     } catch (err) {
         console.error('Dashboard metrics load error:', err);
     }
@@ -938,6 +978,38 @@ async function renderStudentDashboard(container) {
                         </div>
                     </div>
                 </div>
+
+                <div class="bg-white rounded-3xl p-6 shadow-sm border border-gray-100">
+                    <h3 class="text-xl font-display font-bold text-gray-800 flex items-center mb-4">
+                        <i data-lucide="library" class="w-5 h-5 text-child-secondary mr-2"></i> Şu An Okuduklarım
+                    </h3>
+                    ${ongoingBooks.length === 0 ? `
+                        <div class="text-sm text-gray-500 bg-gray-50 border border-gray-100 rounded-2xl p-4">
+                            Aktif okuma listen henüz boş. Kütüphaneden bir kitap seçip başlayabilirsin.
+                        </div>
+                    ` : `
+                        <div class="overflow-x-auto no-scrollbar">
+                            <div class="flex gap-4 snap-x snap-mandatory pb-1">
+                                ${ongoingBooks.map((book) => `
+                                    <button onclick="startReadingForIsbn('${book.edition_id}')" class="snap-start shrink-0 w-56 text-left rounded-2xl border border-gray-100 bg-gradient-to-br from-white to-indigo-50 p-4 shadow-sm hover:shadow-md transition">
+                                        <div class="flex items-center justify-between mb-3">
+                                            <div class="w-11 h-11 rounded-xl bg-indigo-100 text-indigo-600 flex items-center justify-center">
+                                                <i data-lucide="book-marked" class="w-5 h-5"></i>
+                                            </div>
+                                            <span class="text-xs font-semibold text-indigo-700 bg-indigo-100 px-2 py-1 rounded-full">${Math.max(0, Number(book.progress_percent) || 0)}%</span>
+                                        </div>
+                                        <h4 class="font-bold text-sm text-gray-900 line-clamp-2">${book.title || 'İsimsiz Kitap'}</h4>
+                                        <p class="text-xs text-gray-500 mt-1 line-clamp-1">${book.author || 'Bilinmeyen Yazar'}</p>
+                                        <div class="w-full bg-white rounded-full h-2 mt-3 overflow-hidden border border-indigo-100">
+                                            <div class="bg-indigo-500 h-2 rounded-full transition-all duration-700" style="width: ${Math.max(0, Number(book.progress_percent) || 0)}%"></div>
+                                        </div>
+                                        <p class="text-[11px] text-gray-500 mt-2">Sayfa ${Number(book.current_page) || 0} / ${Number(book.page_count) || 0}</p>
+                                    </button>
+                                `).join('')}
+                            </div>
+                        </div>
+                    `}
+                </div>
             </div>
         </div>
 
@@ -946,7 +1018,7 @@ async function renderStudentDashboard(container) {
             <div class="bg-white rounded-3xl shadow-xl w-full max-w-md overflow-hidden animate-slide-up">
                 <div class="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-indigo-50/50">
                     <h3 class="font-bold text-lg text-indigo-900 flex items-center">
-                        <i data-lucide="book-open" class="w-5 h-5 mr-2 text-indigo-500"></i> Bugün Ne Kadar Okudun?
+                        <i data-lucide="book-open" class="w-5 h-5 mr-2 text-indigo-500"></i> Şu An Kaçıncı Sayfadasın?
                     </h3>
                     <button onclick="closeReadingLogModal()" class="text-gray-400 hover:text-gray-600 p-1">
                         <i data-lucide="x" class="w-5 h-5"></i>
@@ -1602,6 +1674,15 @@ async function renderBadgesView(container) {
 
     const earned = data.badges.filter((b) => b.earned);
     const locked = data.badges.filter((b) => !b.earned);
+    const nextTargets = [...locked]
+        .sort((a, b) => {
+            const progressDiff = (Number(b.progress_percent) || 0) - (Number(a.progress_percent) || 0);
+            if (progressDiff !== 0) return progressDiff;
+            const remainingA = (Number(a.target_value) || 0) - (Number(a.current_value) || 0);
+            const remainingB = (Number(b.target_value) || 0) - (Number(b.current_value) || 0);
+            return remainingA - remainingB;
+        })
+        .slice(0, 3);
     const badgeThemesByType = {
         total_pages: {
             card: 'bg-gradient-to-br from-sky-500 via-blue-500 to-indigo-600 border-blue-300',
@@ -1652,12 +1733,42 @@ async function renderBadgesView(container) {
 
             <div>
                 <h3 class="text-lg font-bold text-gray-800 mb-3 flex items-center">
-                    <i data-lucide="award" class="w-5 h-5 mr-2 text-amber-500"></i> Kazanılan Rozetler
+                    <i data-lucide="target" class="w-5 h-5 mr-2 text-indigo-500"></i> Sıradaki Hedeflerin
+                </h3>
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    ${nextTargets.length === 0 ? `
+                        <div class="sm:col-span-2 lg:col-span-3 bg-white rounded-2xl p-5 shadow-sm border border-gray-100 text-sm text-gray-500">
+                            Kilitli rozet kalmadı. Hepsini tamamladın, harikasın!
+                        </div>
+                    ` : nextTargets.map((badge) => {
+                        const theme = getBadgeTheme(badge);
+                        return `
+                        <div class="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 min-h-[220px] flex flex-col">
+                            <div class="flex items-start justify-between">
+                                <div class="w-16 h-16 rounded-2xl ${theme.lockedIconWrap} flex items-center justify-center">
+                                    <i data-lucide="${badge.icon_key || 'medal'}" class="w-8 h-8"></i>
+                                </div>
+                                <span class="text-[11px] px-2 py-1 rounded-full bg-gray-100 text-gray-600 font-semibold">${badge.current_value} / ${badge.target_value}</span>
+                            </div>
+                            <h4 class="font-bold text-gray-900 text-lg mt-4 leading-tight">${badge.name}</h4>
+                            <p class="text-sm text-gray-500 mt-2">${badge.description || ''}</p>
+                            <div class="w-full bg-gray-100 rounded-full h-2 mt-auto overflow-hidden">
+                                <div class="${theme.lockedProgress} h-2 rounded-full transition-all duration-700" style="width: ${badge.progress_percent}%"></div>
+                            </div>
+                        </div>
+                    `;
+                    }).join('')}
+                </div>
+            </div>
+
+            <div>
+                <h3 class="text-lg font-bold text-gray-800 mb-3 flex items-center">
+                    <i data-lucide="gift" class="w-5 h-5 mr-2 text-amber-500"></i> Hazine Sandığım
                 </h3>
                 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                     ${earned.length === 0 ? `
                         <div class="sm:col-span-2 lg:col-span-3 xl:col-span-4 bg-white rounded-2xl p-5 shadow-sm border border-gray-100 text-sm text-gray-500">
-                            Henüz rozet kazanmadın. Okudukça rozetlerin burada görünecek.
+                            Henüz rozet kazanmadın. Okudukça hazine sandığın dolacak.
                         </div>
                     ` : earned.map((badge) => {
                         const theme = getBadgeTheme(badge);
@@ -1681,38 +1792,13 @@ async function renderBadgesView(container) {
                     }).join('')}
                 </div>
             </div>
-
-            <div>
-                <h3 class="text-lg font-bold text-gray-800 mb-3 flex items-center">
-                    <i data-lucide="lock" class="w-5 h-5 mr-2 text-gray-500"></i> Kilitli Rozetler
-                </h3>
-                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                    ${locked.map((badge) => {
-                        const theme = getBadgeTheme(badge);
-                        return `
-                        <div class="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 min-h-[220px] flex flex-col">
-                            <div class="flex items-start justify-between">
-                                <div class="w-16 h-16 rounded-2xl ${theme.lockedIconWrap} flex items-center justify-center">
-                                    <i data-lucide="${badge.icon_key || 'medal'}" class="w-8 h-8"></i>
-                                </div>
-                                <span class="text-[11px] px-2 py-1 rounded-full bg-gray-100 text-gray-600 font-semibold">${badge.current_value} / ${badge.target_value}</span>
-                            </div>
-                            <h4 class="font-bold text-gray-900 text-lg mt-4 leading-tight">${badge.name}</h4>
-                            <p class="text-sm text-gray-500 mt-2">${badge.description || ''}</p>
-                            <div class="w-full bg-gray-100 rounded-full h-2 mt-auto overflow-hidden">
-                                <div class="${theme.lockedProgress} h-2 rounded-full transition-all duration-700" style="width: ${badge.progress_percent}%"></div>
-                            </div>
-                        </div>
-                    `;
-                    }).join('')}
-                </div>
-            </div>
         </div>
     `;
 }
 
 async function renderLibraryView(container) {
     document.getElementById('page-title').textContent = "Kütüphane";
+    AppState.data.pendingIsbnBook = null;
 
     container.innerHTML = `
         <div class="space-y-6 animate-slide-up max-w-2xl mx-auto">
@@ -1722,7 +1808,7 @@ async function renderLibraryView(container) {
                     <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400"></i>
                     <input type="text" placeholder="Kitap veya yazar ara..." class="w-full pl-10 pr-4 py-3 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-child-primary focus:border-child-primary shadow-sm outline-none transition-all">
                 </div>
-                <button onclick="document.getElementById('add-book-modal').classList.remove('hidden')" class="bg-child-primary text-white p-3 rounded-xl shadow-sm hover:bg-amber-600 transition-colors flex items-center justify-center shrink-0">
+                <button onclick="openAddBookModal()" class="bg-child-primary text-white p-3 rounded-xl shadow-sm hover:bg-amber-600 transition-colors flex items-center justify-center shrink-0">
                     <i data-lucide="plus" class="w-6 h-6"></i>
                 </button>
             </div>
@@ -1751,57 +1837,41 @@ async function renderLibraryView(container) {
             <div class="bg-white rounded-3xl shadow-xl w-full max-w-md overflow-hidden animate-slide-up">
                 <div class="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
                     <h3 class="font-bold text-lg text-gray-800">Sisteme Kitap Ekle</h3>
-                    <button onclick="document.getElementById('add-book-modal').classList.add('hidden')" class="text-gray-400 hover:text-gray-600 p-1">
+                    <button onclick="closeAddBookModal()" class="text-gray-400 hover:text-gray-600 p-1">
                         <i data-lucide="x" class="w-5 h-5"></i>
                     </button>
                 </div>
                 <div class="p-6">
                     <form id="add-book-form" class="space-y-4">
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1 flex justify-between items-center">
-                                ISBN <span class="text-red-500">*</span>
-                                <button type="button" onclick="startBarcodeScanner()" class="text-indigo-600 hover:text-indigo-800 text-xs flex items-center bg-indigo-50 px-2 py-1 rounded">
-                                    <i data-lucide="scan-line" class="w-3 h-3 mr-1"></i> Barkod Tara
-                                </button>
+                        <div class="rounded-2xl border border-indigo-100 bg-indigo-50/60 p-4">
+                            <label class="block text-sm font-bold text-indigo-900 mb-2">
+                                ISBN Barkod Okut
                             </label>
-                            <input type="text" id="new-book-isbn" required class="w-full px-3 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-child-primary bg-gray-50 mb-2" placeholder="Örn: 9781234567890">
-                            
-                            <!-- Scanner Video Viewfinder -->
-                            <div id="barcode-scanner-container" class="hidden w-full mb-2 rounded-xl border border-gray-300 overflow-hidden bg-black relative">
-                                <video id="barcode-video" class="w-full h-48 object-cover"></video>
-                                <button type="button" onclick="stopBarcodeScanner()" class="absolute top-2 right-2 text-white bg-red-500/80 hover:bg-red-500 p-1 rounded-full"><i data-lucide="x" class="w-4 h-4"></i></button>
-                                <div class="absolute inset-0 border-2 border-green-500/50 m-4 rounded pointer-events-none"></div>
-                                <p class="absolute bottom-2 left-0 right-0 text-center text-white text-xs bg-black/50">Barkodu kameranın içine yerleştirin</p>
+                            <button type="button" id="start-isbn-scan-btn" class="w-full py-2.5 rounded-xl bg-indigo-600 text-white font-semibold hover:bg-indigo-700 transition-colors flex items-center justify-center">
+                                <i data-lucide="scan-line" class="w-4 h-4 mr-2"></i> Kamerayı Aç
+                            </button>
+                            <div id="barcode-scanner-container" class="hidden mt-3 w-full rounded-xl border border-indigo-200 overflow-hidden bg-white">
+                                <div id="barcode-scanner-reader" class="w-full min-h-[240px]"></div>
+                                <button type="button" onclick="stopBarcodeScanner()" class="w-full py-2 text-sm font-semibold text-red-600 bg-red-50 hover:bg-red-100 transition-colors">Taramayı Durdur</button>
                             </div>
                         </div>
+
                         <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Kitap Adı <span class="text-red-500">*</span></label>
-                            <input type="text" id="new-book-title" required class="w-full px-3 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-child-primary bg-gray-50" placeholder="Örn: Nutuk">
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Yazar <span class="text-red-500">*</span></label>
-                            <input type="text" id="new-book-author" required class="w-full px-3 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-child-primary bg-gray-50" placeholder="Örn: Mustafa Kemal Atatürk">
-                        </div>
-                        <div class="grid grid-cols-2 gap-4">
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700 mb-1">Sayfa Sayısı <span class="text-red-500">*</span></label>
-                                <input type="number" id="new-book-pages" required class="w-full px-3 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-child-primary bg-gray-50" placeholder="Örn: 600">
+                            <label class="block text-sm font-bold text-gray-800 mb-2">Manuel ISBN Gir</label>
+                            <div class="flex gap-2">
+                                <input type="text" id="new-book-isbn" required class="flex-1 px-3 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-child-primary bg-gray-50" placeholder="Örn: 9781234567890">
+                                <button type="submit" class="px-4 rounded-xl bg-child-primary text-white font-semibold hover:bg-amber-600 transition-colors">Getir</button>
                             </div>
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700 mb-1">Kategori</label>
-                                <select id="new-book-category" class="w-full px-3 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-child-primary bg-gray-50">
-                                    <option value="Roman">Roman</option>
-                                    <option value="Tarih">Tarih</option>
-                                    <option value="Bilim">Bilim</option>
-                                    <option value="Hikaye">Hikaye</option>
-                                    <option value="Diğer">Diğer</option>
-                                </select>
-                            </div>
+                            <p class="text-xs text-gray-500 mt-2">Kitap bilgisi önce doğrulanır, sonra onayınla kitaplığa eklenir.</p>
                         </div>
-                        <button type="submit" class="w-full mt-6 py-3 bg-child-primary text-white font-bold rounded-xl hover:bg-amber-600 transition-colors shadow-sm focus:ring-2 focus:ring-child-primary focus:ring-offset-2">
-                            Kitabı Kaydet
-                        </button>
                     </form>
+
+                    <div id="isbn-fetch-loader" class="hidden mt-4 rounded-2xl border border-indigo-100 bg-indigo-50/70 p-4 flex items-center">
+                        <div class="animate-spin rounded-full h-5 w-5 border-2 border-indigo-200 border-t-indigo-600 mr-3"></div>
+                        <p class="text-sm font-semibold text-indigo-900">Aranıyor...</p>
+                    </div>
+
+                    <div id="book-confirm-card" class="hidden mt-5 rounded-2xl border border-emerald-100 bg-emerald-50/40 p-4"></div>
                 </div>
             </div>
         </div>
@@ -1812,116 +1882,270 @@ async function renderLibraryView(container) {
 
     // Process Add Book form
     const form = document.getElementById('add-book-form');
+    const scanBtn = document.getElementById('start-isbn-scan-btn');
+    if (scanBtn) {
+        scanBtn.addEventListener('click', async () => {
+            await startBarcodeScanner();
+        });
+    }
+
     if (form) {
         form.addEventListener('submit', async (e) => {
             e.preventDefault();
-            const isbn = document.getElementById('new-book-isbn').value.replace(/-/g, '');
-            const title = document.getElementById('new-book-title').value;
-            const author = document.getElementById('new-book-author').value;
-            const pages = document.getElementById('new-book-pages').value;
-            const category = document.getElementById('new-book-category').value;
-
-            showToast('Kitap sisteme ekleniyor...', 'info');
-            try {
-                const addRes = await apiCall({
-                    action: 'add_book_edition',
-                    resource: 'k_t_book_editions',
-                    data: {
-                        isbn: isbn,
-                        title: title,
-                        author: author,
-                        category: category,
-                        page_count: pages
-                    }
-                });
-                const createdRows = normalizeApiDataArray(addRes);
-
-                // Hard verification: ensure edition really exists in k_t_book_editions.
-                const verifyRes = await apiCall({
-                    action: 'read',
-                    resource: 'k_t_book_editions',
-                    data: {
-                        fields: ['isbn', 'book_id', 'page_count'],
-                        filters: { isbn: isbn },
-                        limit: 1
-                    }
-                });
-                const verifyRows = normalizeApiDataArray(verifyRes);
-                if (createdRows.length === 0 || verifyRows.length === 0) {
-                    throw new Error('Book edition insert verification failed');
-                }
-
-                document.getElementById('add-book-modal').classList.add('hidden');
-                form.reset();
-                showToast('Kitap başarıyla sisteme eklendi! Teşekkürler.', 'success');
-
-                // Refresh library view to show the new book
-                renderLibraryView(document.getElementById('view-container'));
-
-            } catch (err) {
-                console.error('Add book error:', err);
-            }
+            const isbn = document.getElementById('new-book-isbn').value.replace(/-/g, '').trim();
+            await fetchBookByIsbnForConfirm(isbn);
         });
     }
 }
 
 // Global Barcode Scanner State
-let barcodeScannerStream = null;
+let html5QrScanner = null;
 
 async function startBarcodeScanner() {
     const container = document.getElementById('barcode-scanner-container');
-    const video = document.getElementById('barcode-video');
+    if (!container) return;
 
-    if (!('BarcodeDetector' in window)) {
-        showToast('Tarayıcınız yerleşik barkod okumayı desteklemiyor. Lütfen elle yazın.', 'error');
+    if (!window.Html5Qrcode) {
+        showToast('Barkod tarayıcı yüklenemedi. ISBN numarasını elle girebilirsin.', 'error');
         return;
     }
 
     container.classList.remove('hidden');
 
     try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode: 'environment' }
-        });
-        video.srcObject = stream;
-        video.setAttribute("playsinline", true);
-        await video.play();
-        barcodeScannerStream = stream;
+        if (html5QrScanner) {
+            await stopBarcodeScanner();
+        }
 
-        const barcodeDetector = new BarcodeDetector({ formats: ['ean_13', 'ean_8', 'upc_a', 'upc_e'] });
-
-        const scanLoop = async () => {
-            if (!barcodeScannerStream) return;
-            try {
-                const barcodes = await barcodeDetector.detect(video);
-                if (barcodes.length > 0) {
-                    const isbn = barcodes[0].rawValue;
-                    document.getElementById('new-book-isbn').value = isbn;
-                    showToast('Barkod okundu: ' + isbn, 'success');
-                    stopBarcodeScanner();
-                    return;
-                }
-            } catch (e) {
-                // Ignore detection errors during loop
+        html5QrScanner = new Html5Qrcode('barcode-scanner-reader');
+        await html5QrScanner.start(
+            { facingMode: 'environment' },
+            {
+                fps: 10,
+                qrbox: { width: 250, height: 120 },
+                formatsToSupport: [
+                    Html5QrcodeSupportedFormats.EAN_13,
+                    Html5QrcodeSupportedFormats.EAN_8,
+                    Html5QrcodeSupportedFormats.UPC_A,
+                    Html5QrcodeSupportedFormats.UPC_E
+                ]
+            },
+            async (decodedText) => {
+                const isbn = String(decodedText || '').replace(/\D/g, '').trim();
+                if (!isbn) return;
+                document.getElementById('new-book-isbn').value = isbn;
+                await stopBarcodeScanner();
+                await fetchBookByIsbnForConfirm(isbn);
             }
-            requestAnimationFrame(scanLoop);
-        };
-
-        scanLoop();
-
+        );
     } catch (err) {
-        showToast('Kameraya erişilemedi.', 'error');
+        console.error('Barcode scanner start error:', err);
+        showToast('Kamera açılamadı. ISBN numarasını elle girebilirsin.', 'error');
         container.classList.add('hidden');
     }
 }
 
-function stopBarcodeScanner() {
+async function stopBarcodeScanner() {
     const container = document.getElementById('barcode-scanner-container');
     if (container) container.classList.add('hidden');
 
-    if (barcodeScannerStream) {
-        barcodeScannerStream.getTracks().forEach(track => track.stop());
-        barcodeScannerStream = null;
+    if (html5QrScanner) {
+        try {
+            await html5QrScanner.stop();
+        } catch (_) {
+            // noop
+        }
+        await html5QrScanner.clear();
+        html5QrScanner = null;
+    }
+}
+
+async function fetchBookByIsbnForConfirm(rawIsbn) {
+    const isbn = String(rawIsbn || '').replace(/-/g, '').trim();
+    if (!isbn) {
+        setIsbnFetchLoading(false);
+        showToast('Lütfen geçerli bir ISBN gir.', 'error');
+        return;
+    }
+
+    setIsbnFetchLoading(true);
+    showToast('Kitap bilgisi getiriliyor...', 'info');
+    try {
+        const res = await apiCall('fetch_book_by_isbn', null, { isbn });
+
+        let payload = res;
+        if (Array.isArray(res) && res.length > 0) payload = res[0];
+        if (typeof payload === 'string') {
+            try {
+                payload = JSON.parse(payload);
+            } catch (_) {
+                payload = null;
+            }
+        }
+
+        if (!payload || payload.status === 'error') {
+            showToast(payload?.message || 'Bu ISBN ile kitap bulunamadı.', 'error');
+            setIsbnFetchLoading(false);
+            return;
+        }
+
+        const data = payload.data || {};
+        AppState.data.pendingIsbnBook = {
+            isbn,
+            title: data.title || 'İsimsiz Kitap',
+            author: data.author || 'Bilinmeyen Yazar',
+            page_count: Number(data.page_count) || 0,
+            category: data.category || 'Diğer',
+            thumbnail_url: data.thumbnail_url || ''
+        };
+        renderBookConfirmationCard();
+        setIsbnFetchLoading(false);
+    } catch (err) {
+        console.error('fetch_book_by_isbn error:', err);
+        setIsbnFetchLoading(false);
+    }
+}
+
+function renderBookConfirmationCard() {
+    const card = document.getElementById('book-confirm-card');
+    const pending = AppState.data.pendingIsbnBook;
+    if (!card || !pending) return;
+
+    card.classList.remove('hidden');
+    card.innerHTML = `
+        <h4 class="font-bold text-emerald-900 flex items-center">
+            <i data-lucide="shield-check" class="w-4 h-4 mr-2"></i> Kitap Bilgisi Onayı
+        </h4>
+        <div class="mt-3 flex gap-3">
+            <div class="w-20 h-28 rounded-xl overflow-hidden border border-emerald-100 bg-white shrink-0">
+                ${buildBookCoverHtml(pending.thumbnail_url, pending.title)}
+            </div>
+            <div class="flex-1">
+                <p class="font-bold text-gray-900 leading-tight">${escapeHtml(pending.title)}</p>
+                <p class="text-sm text-gray-600 mt-1">${escapeHtml(pending.author)}</p>
+                <p class="text-xs text-gray-500 mt-2">${pending.page_count || 0} sayfa</p>
+            </div>
+        </div>
+        <div class="mt-4">
+            <label class="block text-xs font-bold text-gray-700 mb-1">Kategori</label>
+            <select id="confirm-book-category" class="w-full px-3 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-200 bg-white text-sm">
+                <option value="Roman" ${pending.category === 'Roman' ? 'selected' : ''}>Roman</option>
+                <option value="Tarih" ${pending.category === 'Tarih' ? 'selected' : ''}>Tarih</option>
+                <option value="Bilim" ${pending.category === 'Bilim' ? 'selected' : ''}>Bilim</option>
+                <option value="Hikaye" ${pending.category === 'Hikaye' ? 'selected' : ''}>Hikaye</option>
+                <option value="Diğer" ${pending.category === 'Diğer' ? 'selected' : ''}>Diğer</option>
+            </select>
+        </div>
+        <div class="grid grid-cols-2 gap-2 mt-4">
+            <button id="confirm-add-book-btn" class="py-2.5 rounded-xl bg-emerald-600 text-white font-semibold hover:bg-emerald-700 transition-colors">
+                Evet, Kitaplığıma Ekle
+            </button>
+            <button id="retry-scan-btn" class="py-2.5 rounded-xl bg-white border border-gray-200 text-gray-700 font-semibold hover:bg-gray-50 transition-colors">
+                Tekrar Tara
+            </button>
+        </div>
+    `;
+    lucide.createIcons({ root: card });
+
+    const confirmBtn = document.getElementById('confirm-add-book-btn');
+    if (confirmBtn) {
+        confirmBtn.addEventListener('click', async () => {
+            await confirmAddBookFromPending();
+        });
+    }
+    const retryBtn = document.getElementById('retry-scan-btn');
+    if (retryBtn) {
+        retryBtn.addEventListener('click', async () => {
+            await stopBarcodeScanner();
+            card.classList.add('hidden');
+            AppState.data.pendingIsbnBook = null;
+            await startBarcodeScanner();
+        });
+    }
+}
+
+async function confirmAddBookFromPending() {
+    const pending = AppState.data.pendingIsbnBook;
+    if (!pending) {
+        showToast('Önce ISBN ile kitap bilgisi getir.', 'error');
+        return;
+    }
+
+    showToast('Kitap sisteme ekleniyor...', 'info');
+    try {
+        const categorySelect = document.getElementById('confirm-book-category');
+        const selectedCategory = categorySelect ? categorySelect.value : (pending.category || 'Diğer');
+        const addRes = await apiCall({
+            action: 'add_book_edition',
+            resource: 'k_t_book_editions',
+            data: {
+                isbn: pending.isbn,
+                title: pending.title,
+                author: pending.author,
+                category: selectedCategory,
+                page_count: pending.page_count,
+                thumbnail_url: pending.thumbnail_url || ''
+            }
+        });
+        const createdRows = normalizeApiDataArray(addRes);
+        if (createdRows.length === 0) {
+            throw new Error('Book edition insert failed');
+        }
+
+        document.getElementById('add-book-modal').classList.add('hidden');
+        document.getElementById('add-book-form').reset();
+        const card = document.getElementById('book-confirm-card');
+        if (card) {
+            card.classList.add('hidden');
+            card.innerHTML = '';
+        }
+        AppState.data.pendingIsbnBook = null;
+        showToast('Kitap başarıyla sisteme eklendi!', 'success');
+        await renderLibraryView(document.getElementById('view-container'));
+    } catch (err) {
+        console.error('Add book confirm error:', err);
+    }
+}
+
+function setIsbnFetchLoading(isLoading) {
+    const loader = document.getElementById('isbn-fetch-loader');
+    const form = document.getElementById('add-book-form');
+    if (loader) {
+        loader.classList.toggle('hidden', !isLoading);
+    }
+    if (form) {
+        if (isLoading) {
+            form.classList.add('opacity-60', 'pointer-events-none');
+        } else {
+            form.classList.remove('opacity-60', 'pointer-events-none');
+        }
+    }
+}
+
+async function closeAddBookModal() {
+    const modal = document.getElementById('add-book-modal');
+    if (modal) modal.classList.add('hidden');
+    await stopBarcodeScanner();
+    setIsbnFetchLoading(false);
+    AppState.data.pendingIsbnBook = null;
+    const card = document.getElementById('book-confirm-card');
+    if (card) {
+        card.classList.add('hidden');
+        card.innerHTML = '';
+    }
+}
+
+function openAddBookModal() {
+    const modal = document.getElementById('add-book-modal');
+    if (modal) modal.classList.remove('hidden');
+    const form = document.getElementById('add-book-form');
+    if (form) form.reset();
+    setIsbnFetchLoading(false);
+    AppState.data.pendingIsbnBook = null;
+    const card = document.getElementById('book-confirm-card');
+    if (card) {
+        card.classList.add('hidden');
+        card.innerHTML = '';
     }
 }
 
@@ -1931,7 +2155,7 @@ async function fetchLibraryBooks() {
             action: 'read',
             resource: 'k_t_book_editions',
             data: {
-                fields: ['isbn', 'book_id', 'page_count'],
+                fields: ['isbn', 'book_id', 'page_count', 'thumbnail_url'],
                 order: 'isbn DESC',
                 limit: 24
             }
@@ -1977,6 +2201,7 @@ async function fetchLibraryBooks() {
             return {
                 isbn: edition.isbn || '',
                 page_count: Number(edition.page_count) || 0,
+                thumbnail_url: edition.thumbnail_url || '',
                 title,
                 author,
                 category
@@ -1988,8 +2213,8 @@ async function fetchLibraryBooks() {
             const safeAuthor = String(b.author || '').replace(/'/g, "\\'");
             grid.innerHTML += `
             <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 flex flex-col items-center text-center">
-                <div class="w-20 h-28 bg-blue-50 rounded-lg shadow-inner mb-3 flex items-center justify-center">
-                    <i data-lucide="book" class="text-blue-200 w-8 h-8"></i>
+                <div class="w-20 h-28 rounded-lg shadow-inner mb-3 overflow-hidden border border-slate-100">
+                    ${buildBookCoverHtml(b.thumbnail_url, b.title, 'w-full h-full object-cover')}
                 </div>
                 <h4 class="font-bold text-sm text-gray-900 line-clamp-2">${b.title}</h4>
                 <p class="text-xs text-gray-500 mt-1 line-clamp-1">${b.author || 'Bilinmeyen Yazar'}</p>
@@ -2306,7 +2531,7 @@ function setupEventListeners() {
     });
 }
 
-function showToast(message, type = 'info') {
+function showToast(message, type = 'info', options = {}) {
     const container = document.getElementById('inline-alert-container');
     if (!container) return;
 
@@ -2331,9 +2556,16 @@ function showToast(message, type = 'info') {
                 <i data-lucide="${icon}" class="w-5 h-5 mr-3 mt-0.5 shrink-0"></i>
                 <p class="text-sm font-medium">${message}</p>
             </div>
-            <button id="inline-alert-close" class="p-1 rounded-md hover:bg-black/5 transition-colors" aria-label="Mesajı kapat">
-                <i data-lucide="x" class="w-4 h-4"></i>
-            </button>
+            <div class="flex items-center gap-2">
+                ${options.actionLabel ? `
+                    <button id="inline-alert-action" class="text-xs font-bold px-2 py-1 rounded-md bg-white/70 hover:bg-white transition-colors">
+                        ${escapeHtml(options.actionLabel)}
+                    </button>
+                ` : ''}
+                <button id="inline-alert-close" class="p-1 rounded-md hover:bg-black/5 transition-colors" aria-label="Mesajı kapat">
+                    <i data-lucide="x" class="w-4 h-4"></i>
+                </button>
+            </div>
         </div>
     `;
     lucide.createIcons({ root: container });
@@ -2343,6 +2575,17 @@ function showToast(message, type = 'info') {
         closeBtn.addEventListener('click', () => {
             container.classList.add('hidden');
             container.innerHTML = '';
+        });
+    }
+
+    const actionBtn = document.getElementById('inline-alert-action');
+    if (actionBtn && typeof options.onAction === 'function') {
+        actionBtn.addEventListener('click', async () => {
+            try {
+                await options.onAction();
+            } catch (err) {
+                console.error('Alert action error:', err);
+            }
         });
     }
 }
@@ -2361,7 +2604,8 @@ async function logReading(newPage, noteText) {
     showToast('Okuma kaydediliyor...', 'info');
 
     try {
-        await apiCall({
+        const prevPage = Number(AppState.data.activeBook.current_page) || 0;
+        const logRes = await apiCall({
             action: 'log_read',
             resource: 'k_t_read_logs',
             data: {
@@ -2371,9 +2615,18 @@ async function logReading(newPage, noteText) {
                 read_date: new Date().toISOString().split('T')[0]
             }
         });
+        const logRows = normalizeApiDataArray(logRes);
+        const insertedLogId = logRows[0]?.id || null;
 
         // Update local state and dynamically refresh dashboard
         AppState.data.activeBook.current_page = newPage;
+        AppState.data.lastReadAction = {
+            log_id: insertedLogId,
+            isbn: AppState.data.activeBook.edition_id,
+            prev_page: prevPage,
+            new_page: newPage,
+            pages_read: deltaStr
+        };
 
         closeReadingLogModal();
         renderStudentDashboard(document.getElementById('view-container'));
@@ -2386,12 +2639,52 @@ async function logReading(newPage, noteText) {
             colors: ['#f59e0b', '#6366f1', '#10b981', '#ef4444']
         });
 
-        showToast(`Harika! ${deltaStr} sayfa daha okudun.`, 'success');
+        showToast(`Harika! ${deltaStr} sayfa daha okudun.`, 'success', {
+            actionLabel: 'Geri Al',
+            onAction: async () => {
+                await undoLastReadAction();
+            }
+        });
         await syncBadgeAchievements(true);
 
     } catch (err) {
         console.error('Log reading error:', err);
     }
+}
+
+async function undoLastReadAction() {
+    const last = AppState.data.lastReadAction;
+    if (!last) {
+        showToast('Geri alınacak bir okuma kaydı bulunamadı.', 'info');
+        return;
+    }
+
+    // MVP simülasyonu: backend aksiyonu çağrılır; destek yoksa yerelde geri alınır.
+    try {
+        await fetch(API_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify({
+                action: 'undo_read_log',
+                resource: 'k_t_read_logs',
+                data: { log_id: last.log_id, isbn: last.isbn, pages_read: last.pages_read },
+                user_id: AppState.user?.id || null
+            })
+        });
+    } catch (err) {
+        console.warn('undo_read_log simülasyonu backend tarafında başarısız:', err);
+    }
+
+    if (AppState.data.activeBook && AppState.data.activeBook.edition_id === last.isbn) {
+        AppState.data.activeBook.current_page = Math.max(0, Number(last.prev_page) || 0);
+    }
+    AppState.data.lastReadAction = null;
+
+    await renderStudentDashboard(document.getElementById('view-container'));
+    showToast('Son okuma girişi geri alındı.', 'info');
 }
 
 function logout() {
