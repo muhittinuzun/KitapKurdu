@@ -797,86 +797,11 @@ async function getGroupNameById(groupId) {
 
 async function loadStudentActiveBook() {
     if (!AppState.user || !AppState.user.id) return;
-
     try {
-        const logsRes = await apiCall({
-            action: 'read',
-            resource: 'k_t_read_logs',
-            data: {
-                fields: ['book_isbn', 'pages_read', 'read_date', 'note'],
-                filters: { user_id: AppState.user.id },
-                order: 'read_date DESC',
-                limit: 300
-            }
-        });
-
-        const logs = logsRes.data || [];
-        if (logs.length === 0) return;
-
-        const latestEventByIsbn = {};
-        const totalPagesByIsbn = {};
-
-        logs.forEach((log) => {
-            const isbn = log.book_isbn;
-            if (!isbn) return;
-
-            if (!latestEventByIsbn[isbn]) {
-                latestEventByIsbn[isbn] = parseReadLogEvent(log.note) || 'read';
-            }
-            totalPagesByIsbn[isbn] = (totalPagesByIsbn[isbn] || 0) + Math.max(0, Number(log.pages_read) || 0);
-        });
-
-        let latestIsbn = null;
-        for (const log of logs) {
-            const isbn = log.book_isbn;
-            if (!isbn) continue;
-            const latestEvent = latestEventByIsbn[isbn];
-            if (latestEvent !== 'drop' && latestEvent !== 'finish') {
-                latestIsbn = isbn;
-                break;
-            }
-        }
-
-        if (!latestIsbn) {
-            const fallback = logs.find((log) => log.book_isbn && latestEventByIsbn[log.book_isbn] !== 'drop');
-            latestIsbn = fallback ? fallback.book_isbn : null;
-        }
-
-        if (!latestIsbn) return;
-
-        const currentPage = totalPagesByIsbn[latestIsbn] || 0;
-
-        const editionRes = await apiCall({
-            action: 'read',
-            resource: 'k_t_book_editions',
-            data: {
-                fields: ['isbn', 'book_id', 'page_count'],
-                filters: { isbn: latestIsbn },
-                limit: 1
-            }
-        });
-        const edition = editionRes.data && editionRes.data.length > 0 ? editionRes.data[0] : null;
-        if (!edition) return;
-
-        const bookRes = await apiCall({
-            action: 'read',
-            resource: 'k_t_books',
-            data: {
-                fields: ['id', 'title', 'author'],
-                filters: { id: edition.book_id },
-                limit: 1
-            }
-        });
-        const book = bookRes.data && bookRes.data.length > 0 ? bookRes.data[0] : {};
-
-        const pageCount = Number(edition.page_count) || Math.max(currentPage, 1);
-        AppState.data.activeBook = {
-            edition_id: edition.isbn || latestIsbn,
-            title: book.title || 'İsimsiz Kitap',
-            author: book.author || 'Bilinmeyen Yazar',
-            page_count: pageCount,
-            current_page: Math.min(Math.max(currentPage, 0), pageCount)
-        };
+        const books = await loadMyBooksData();
+        // En son okunan ve bitmemiş olanı aktif seç, yoksa en son okunanı seç
+        const active = books.find(b => !b.finished && !b.dropped) || (books.length > 0 ? books[0] : null);
+        AppState.data.activeBook = active;
     } catch (err) {
         console.error('Active book load error:', err);
     }
@@ -952,8 +877,7 @@ async function renderStudentDashboard(container) {
                     
                     <div class="flex flex-col sm:flex-row gap-6">
                         <div class="w-32 h-44 bg-gray-200 rounded-xl shadow-inner flex-shrink-0 flex items-center justify-center relative overflow-hidden group">
-                           <i data-lucide="image" class="text-gray-400"></i>
-                           <!-- Book Cover Image would go here -->
+                           ${hasActiveBook ? buildBookCoverHtml(activeBook.thumbnail_url, activeBook.title) : '<i data-lucide="image" class="text-gray-400"></i>'}
                         </div>
                         <div class="flex-1 flex flex-col justify-center">
                             <h4 class="text-2xl font-bold text-gray-900 mb-1">${hasActiveBook ? activeBook.title : 'Henüz aktif kitap yok'}</h4>
@@ -961,14 +885,14 @@ async function renderStudentDashboard(container) {
                             
                             <!-- Progress Bar -->
                             <div class="mb-2 flex justify-between text-sm font-medium">
-                                <span class="text-child-secondary">Sayfa ${hasActiveBook ? safeCurrentPage : 0} / ${hasActiveBook ? safePageCount : 0}</span>
-                                <span class="text-gray-500">${hasActiveBook ? progressPercent : 0}%</span>
+                                <span class="text-child-secondary">Sayfa ${hasActiveBook ? (Number(activeBook.current_page) || 0) : 0} / ${hasActiveBook ? (Number(activeBook.page_count) || 1) : 0}</span>
+                                <span class="text-gray-500">${hasActiveBook ? (Number(activeBook.progress_percent) || 0) : 0}%</span>
                             </div>
                             <div class="w-full bg-gray-100 rounded-full h-3 mb-6 overflow-hidden">
-                                <div class="bg-child-secondary h-3 rounded-full transition-all duration-1000" style="width: ${hasActiveBook ? progressPercent : 0}%"></div>
+                                <div class="bg-child-secondary h-3 rounded-full transition-all duration-1000" style="width: ${hasActiveBook ? (Number(activeBook.progress_percent) || 0) : 0}%"></div>
                             </div>
                             
-                            <button onclick="${hasActiveBook ? 'openReadingLogModal()' : "navigate('library')"}" class="w-full sm:w-auto px-6 py-3 bg-child-primary text-white font-bold rounded-xl shadow-md hover:bg-amber-600 transition-colors flex items-center justify-center group">
+                            <button onclick="${hasActiveBook ? `openReadingLogModal('${activeBook.edition_id}')` : "navigate('library')"}" class="w-full sm:w-auto px-6 py-3 bg-child-primary text-white font-bold rounded-xl shadow-md hover:bg-amber-600 transition-colors flex items-center justify-center group">
                                 <i data-lucide="plus-circle" class="w-5 h-5 mr-2 group-hover:rotate-90 transition-transform"></i> Okuma Ekle
                             </button>
                         </div>
@@ -989,8 +913,8 @@ async function renderStudentDashboard(container) {
                                 ${ongoingBooks.map((book) => `
                                     <button onclick="startReadingForIsbn('${book.edition_id}')" class="snap-start shrink-0 w-56 text-left rounded-2xl border border-gray-100 bg-gradient-to-br from-white to-indigo-50 p-4 shadow-sm hover:shadow-md transition">
                                         <div class="flex items-center justify-between mb-3">
-                                            <div class="w-11 h-11 rounded-xl bg-indigo-100 text-indigo-600 flex items-center justify-center">
-                                                <i data-lucide="book-marked" class="w-5 h-5"></i>
+                                            <div class="w-11 h-11 rounded-xl bg-indigo-100 text-indigo-600 flex items-center justify-center overflow-hidden">
+                                                ${book.thumbnail_url ? `<img src="${book.thumbnail_url}" class="w-full h-full object-cover">` : `<i data-lucide="book-marked" class="w-5 h-5"></i>`}
                                             </div>
                                             <span class="text-xs font-semibold text-indigo-700 bg-indigo-100 px-2 py-1 rounded-full">${Math.max(0, Number(book.progress_percent) || 0)}%</span>
                                         </div>
@@ -1063,7 +987,14 @@ async function renderStudentDashboard(container) {
     }
 }
 
-function openReadingLogModal() {
+async function openReadingLogModal(isbn) {
+    if (isbn && AppState.data.bookProgressMap) {
+        const book = AppState.data.bookProgressMap[isbn];
+        if (book) {
+            AppState.data.activeBook = book;
+            await renderStudentDashboard(document.getElementById('view-container'));
+        }
+    }
     const modal = document.getElementById('read-log-modal');
     if (modal) modal.classList.remove('hidden');
 }
@@ -1142,117 +1073,42 @@ async function renderLeaderboardView(container) {
 async function loadMyBooksData() {
     if (!AppState.user || !AppState.user.id) return [];
 
-    const logsRes = await apiCall({
-        action: 'read',
-        resource: 'k_t_read_logs',
-        data: {
-            fields: ['book_isbn', 'pages_read', 'read_date', 'note'],
-            filters: { user_id: AppState.user.id },
-            order: 'read_date DESC',
-            limit: 1000
-        }
-    });
+    try {
+        const res = await apiCall('get_user_books');
+        const rows = normalizeApiDataArray(res);
 
-    const logs = normalizeApiDataArray(logsRes);
-    AppState.data.recentReadLogs = logs;
-    const grouped = {};
+        const books = rows.map(row => {
+            const pageCount = Number(row.page_count) || 1;
+            const pagesRead = Number(row.pages_read) || 0;
+            const currentPage = Math.min(pagesRead, pageCount);
+            const progress = Math.round((currentPage / pageCount) * 100);
 
-    logs.forEach((log) => {
-        const isbn = log.book_isbn;
-        if (!isbn) return;
-
-        if (!grouped[isbn]) {
-            grouped[isbn] = {
-                edition_id: isbn,
-                title: 'İsimsiz Kitap',
-                author: 'Bilinmeyen Yazar',
-                page_count: 0,
-                current_page: 0,
-                last_read_date: log.read_date || null,
-                latest_event: null,
-                finished_date: null
+            return {
+                edition_id: row.isbn,
+                title: row.title || 'İsimsiz Kitap',
+                author: row.author || 'Bilinmeyen Yazar',
+                page_count: pageCount,
+                current_page: currentPage,
+                thumbnail_url: row.thumbnail_url || '',
+                progress_percent: progress,
+                last_read_date: row.last_read_date,
+                finished: row.finished === true || row.finished === 'true' || currentPage >= pageCount,
+                dropped: row.dropped === true || row.dropped === 'true',
+                finished_date: (row.finished === true || row.finished === 'true') ? row.last_read_date : null
             };
-        }
-
-        if (!grouped[isbn].latest_event) {
-            const evt = parseReadLogEvent(log.note);
-            grouped[isbn].latest_event = evt || 'read';
-            if (evt === 'finish') {
-                grouped[isbn].finished_date = log.read_date || null;
-            }
-        }
-
-        grouped[isbn].current_page += Math.max(0, Number(log.pages_read) || 0);
-        if (log.read_date && (!grouped[isbn].last_read_date || log.read_date > grouped[isbn].last_read_date)) {
-            grouped[isbn].last_read_date = log.read_date;
-        }
-    });
-
-    const books = await Promise.all(Object.keys(grouped).map(async (isbn) => {
-        const editionRes = await apiCall({
-            action: 'read',
-            resource: 'k_t_book_editions',
-            data: {
-                fields: ['isbn', 'book_id', 'page_count'],
-                filters: { isbn: isbn },
-                limit: 1
-            }
         });
-        const editionRows = normalizeApiDataArray(editionRes);
-        const edition = editionRows.length > 0 ? editionRows[0] : null;
 
-        let title = grouped[isbn].title;
-        let author = grouped[isbn].author;
-        let pageCount = Number(edition?.page_count) || Math.max(grouped[isbn].current_page, 1);
+        // AppState sync
+        AppState.data.bookProgressMap = books.reduce((acc, item) => {
+            acc[item.edition_id] = item;
+            return acc;
+        }, {});
 
-        if (edition && edition.book_id) {
-            const bookRes = await apiCall({
-                action: 'read',
-                resource: 'k_t_books',
-                data: {
-                    fields: ['id', 'title', 'author'],
-                    filters: { id: edition.book_id },
-                    limit: 1
-                }
-            });
-
-            const bookRows = normalizeApiDataArray(bookRes);
-            if (bookRows.length > 0) {
-                title = bookRows[0].title || title;
-                author = bookRows[0].author || author;
-            }
-        }
-
-        const currentPage = Math.min(Math.max(grouped[isbn].current_page, 0), pageCount);
-        const progress = Math.round((currentPage / pageCount) * 100);
-
-        const isFinishedByPage = currentPage >= pageCount;
-        const isFinishedByEvent = grouped[isbn].latest_event === 'finish';
-        const isDropped = grouped[isbn].latest_event === 'drop';
-        const finished = isFinishedByEvent || isFinishedByPage;
-        const finishedDate = grouped[isbn].finished_date || (finished ? grouped[isbn].last_read_date : null);
-
-        return {
-            edition_id: edition?.isbn || isbn,
-            title,
-            author,
-            page_count: pageCount,
-            current_page: currentPage,
-            progress_percent: progress,
-            last_read_date: grouped[isbn].last_read_date,
-            finished: finished,
-            dropped: isDropped,
-            finished_date: finishedDate
-        };
-    }));
-
-    books.sort((a, b) => (b.last_read_date || '').localeCompare(a.last_read_date || ''));
-    AppState.data.bookProgressMap = books.reduce((acc, item) => {
-        acc[item.edition_id] = item;
-        return acc;
-    }, {});
-
-    return books;
+        return books;
+    } catch (err) {
+        console.error('loadMyBooksData error:', err);
+        return [];
+    }
 }
 
 async function loadDashboardStats() {
@@ -1502,8 +1358,8 @@ async function renderMyBooksView(container) {
                     ` : ongoing.map((book) => `
                         <div class="bg-white rounded-3xl p-5 shadow-sm border border-gray-100">
                             <div class="flex gap-5">
-                                <div class="w-24 h-36 bg-gray-200 rounded-lg shadow-inner shrink-0 flex items-center justify-center">
-                                    <i data-lucide="image" class="text-gray-400"></i>
+                                <div class="w-24 h-36 bg-gray-200 rounded-lg shadow-inner shrink-0 flex items-center justify-center overflow-hidden">
+                                    ${buildBookCoverHtml(book.thumbnail_url, book.title)}
                                 </div>
                                 <div class="flex-1">
                                     <h4 class="font-bold text-gray-900 text-lg leading-tight">${book.title}</h4>
@@ -1547,8 +1403,8 @@ async function renderMyBooksView(container) {
                         </div>
                     ` : finished.map((book) => `
                         <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 flex items-center">
-                            <div class="w-12 h-16 bg-gray-100 rounded mr-4 flex-shrink-0 flex items-center justify-center border border-gray-200">
-                                <i data-lucide="book" class="w-5 h-5 text-gray-400"></i>
+                            <div class="w-12 h-16 bg-gray-100 rounded mr-4 flex-shrink-0 flex items-center justify-center border border-gray-200 overflow-hidden">
+                                ${book.thumbnail_url ? `<img src="${book.thumbnail_url}" class="w-full h-full object-cover">` : `<i data-lucide="book" class="w-5 h-5 text-gray-400"></i>`}
                             </div>
                             <div class="flex-1">
                                 <h4 class="font-bold text-sm text-gray-900">${book.title}</h4>
