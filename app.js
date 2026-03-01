@@ -1724,6 +1724,55 @@ async function renderLibraryView(container) {
                     </div>
 
                     <div id="book-confirm-card" class="hidden rounded-3xl border border-emerald-200 bg-emerald-50/80 p-5 shadow-md"></div>
+
+                    <!-- Manual Book Entry Form -->
+                    <div id="manual-book-entry-form" class="hidden rounded-3xl border border-indigo-100 bg-white p-6 shadow-md space-y-4">
+                        <div class="flex items-center space-x-2 text-indigo-800 mb-2">
+                             <i data-lucide="edit-3" class="w-5 h-5"></i>
+                             <h4 class="font-bold">Manuel Kitap Girişi</h4>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-bold text-gray-700 mb-1">Kitap Adı <span class="text-red-500">*</span></label>
+                            <input type="text" id="manual-book-title" required class="w-full px-4 py-3 border border-gray-200 rounded-2xl focus:ring-4 focus:ring-indigo-100 focus:border-indigo-400 bg-gray-50 text-sm" placeholder="Kitabın tam adı">
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-bold text-gray-700 mb-1">Yazar <span class="text-red-500">*</span></label>
+                            <input type="text" id="manual-book-author" required class="w-full px-4 py-3 border border-gray-200 rounded-2xl focus:ring-4 focus:ring-indigo-100 focus:border-indigo-400 bg-gray-50 text-sm" placeholder="Yazar adı">
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-bold text-gray-700 mb-1">Sayfa Sayısı <span class="text-red-500">*</span></label>
+                                <input type="number" id="manual-book-pages" required class="w-full px-4 py-3 border border-gray-200 rounded-2xl focus:ring-4 focus:ring-indigo-100 focus:border-indigo-400 bg-gray-50 text-sm" placeholder="Örn: 240">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-bold text-gray-700 mb-1">Kategori</label>
+                                <div class="relative">
+                                    <select id="manual-book-category" class="appearance-none w-full px-4 py-3 border border-gray-200 rounded-2xl focus:ring-4 focus:ring-indigo-100 focus:border-indigo-400 bg-gray-50 text-sm font-medium">
+                                        <option value="Roman">Roman</option>
+                                        <option value="Tarih">Tarih</option>
+                                        <option value="Bilim">Bilim</option>
+                                        <option value="Hikaye">Hikaye</option>
+                                        <option value="Diğer">Diğer</option>
+                                    </select>
+                                    <i data-lucide="chevron-down" class="w-4 h-4 text-gray-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none"></i>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-bold text-gray-700 mb-1">Kapak Görseli URL'si (Opsiyonel)</label>
+                            <input type="url" id="manual-book-thumbnail" class="w-full px-4 py-3 border border-gray-200 rounded-2xl focus:ring-4 focus:ring-indigo-100 focus:border-indigo-400 bg-gray-50 text-sm" placeholder="https://...">
+                            <p class="text-[10px] text-gray-500 mt-1 italic">İnternetten bulduğunuz görselin linkini yapıştırabilirsiniz.</p>
+                        </div>
+
+                        <button type="button" id="save-manual-book-btn" class="w-full py-4 rounded-2xl bg-indigo-600 text-white font-bold hover:bg-indigo-700 transition-all shadow-lg flex items-center justify-center mt-2 group">
+                            <span>Kaydet ve Kitaplığıma Ekle</span>
+                            <i data-lucide="arrow-right" class="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform"></i>
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -1836,8 +1885,9 @@ async function fetchBookByIsbnForConfirm(rawIsbn) {
         }
 
         if (!payload || payload.status === 'error') {
-            showToast(payload?.message || 'Bu ISBN ile kitap bulunamadı.', 'error');
+            // showToast(payload?.message || 'Bu ISBN ile kitap bulunamadı.', 'error');
             setIsbnFetchLoading(false);
+            showManualBookEntryForm(isbn); // Show manual form instead of just error toast
             return;
         }
 
@@ -1855,6 +1905,85 @@ async function fetchBookByIsbnForConfirm(rawIsbn) {
     } catch (err) {
         console.error('fetch_book_by_isbn error:', err);
         setIsbnFetchLoading(false);
+        showManualBookEntryForm(rawIsbn); // Also show manual form on network/api error
+    }
+}
+
+function showManualBookEntryForm(isbn = '') {
+    const searchForm = document.getElementById('add-book-form');
+    const confirmCard = document.getElementById('book-confirm-card');
+    const manualForm = document.getElementById('manual-book-entry-form');
+    const loader = document.getElementById('isbn-fetch-loader');
+
+    if (searchForm) searchForm.classList.add('hidden');
+    if (confirmCard) confirmCard.classList.add('hidden');
+    if (loader) loader.classList.add('hidden');
+
+    if (manualForm) {
+        manualForm.classList.remove('hidden');
+        // Clear previous values but keep ISBN if provided
+        document.getElementById('manual-book-title').value = '';
+        document.getElementById('manual-book-author').value = '';
+        document.getElementById('manual-book-pages').value = '';
+        document.getElementById('manual-book-thumbnail').value = '';
+
+        // Setup Save Button
+        const saveBtn = document.getElementById('save-manual-book-btn');
+        if (saveBtn) {
+            saveBtn.onclick = () => saveManualBookEntry(isbn);
+        }
+
+        // Setup icons for manual form
+        lucide.createIcons();
+    }
+
+    showToast('Kitap bulunamadı. Lütfen bilgileri manuel girin.', 'info');
+}
+
+async function saveManualBookEntry(isbn) {
+    const title = document.getElementById('manual-book-title').value.trim();
+    const author = document.getElementById('manual-book-author').value.trim();
+    const pageCount = document.getElementById('manual-book-pages').value;
+    const category = document.getElementById('manual-book-category').value;
+    const thumbnail = document.getElementById('manual-book-thumbnail').value.trim();
+
+    if (!title || !author || !pageCount) {
+        showToast('Lütfen zorunlu alanları (*) doldurun.', 'warning');
+        return;
+    }
+
+    const saveBtn = document.getElementById('save-manual-book-btn');
+    const originalBtnHtml = saveBtn.innerHTML;
+    saveBtn.disabled = true;
+    saveBtn.innerHTML = `<div class="animate-spin rounded-full h-5 w-5 border-2 border-white/30 border-t-white mr-2"></div> Kaydediliyor...`;
+
+    try {
+        const res = await apiCall('add_book_edition', {
+            isbn: isbn || `M-${Date.now()}`, // Use provided ISBN or generate a fallback
+            title,
+            author,
+            page_count: Number(pageCount),
+            thumbnail_url: thumbnail,
+            category
+        });
+
+        if (res && res.status === 'success') {
+            showToast('Kitap başarıyla eklendi!', 'success');
+            closeAddBookModal();
+            await fetchLibraryBooks();
+            // Refresh current view if it's one that lists books
+            if (['my_books', 'student_dashboard', 'library'].includes(AppState.currentView)) {
+                await navigate(AppState.currentView);
+            }
+        } else {
+            throw new Error(res?.message || 'Sunucu hata döndürdü.');
+        }
+    } catch (err) {
+        console.error('Manual add book error:', err);
+        showToast('Kayıt başarısız oldu.', 'error');
+    } finally {
+        saveBtn.disabled = false;
+        saveBtn.innerHTML = originalBtnHtml;
     }
 }
 
@@ -1876,6 +2005,13 @@ function renderBookConfirmationCard() {
                 <p class="font-bold text-gray-900 leading-tight text-lg">${escapeHtml(pending.title)}</p>
                 <p class="text-sm text-gray-600 mt-1">${escapeHtml(pending.author)}</p>
                 <p class="text-xs text-gray-500 mt-2 inline-flex items-center bg-white/80 border border-emerald-100 px-2 py-1 rounded-full">${pending.page_count || 0} sayfa</p>
+                
+                ${!pending.thumbnail_url ? `
+                    <div class="mt-3">
+                        <label class="block text-[10px] font-bold text-emerald-800 uppercase tracking-wider mb-1">Kapak Bulunamadı. Görsel Linki Ekle (Opsiyonel)</label>
+                        <input type="url" id="confirm-book-thumbnail" class="w-full px-3 py-2 border border-emerald-200 rounded-xl focus:ring-4 focus:ring-emerald-50 focus:border-emerald-300 bg-white/50 text-xs shadow-inner" placeholder="Pexels, Unsplash veya Google linki...">
+                    </div>
+                ` : ''}
             </div>
         </div>
         <div class="mt-4">
@@ -1946,13 +2082,18 @@ async function confirmAddBookFromPending() {
         const categorySelect = document.getElementById('confirm-book-category');
         const selectedCategory = categorySelect ? categorySelect.value : (pending.category || 'Diğer');
 
+        const manualThumbnailInput = document.getElementById('confirm-book-thumbnail');
+        const thumbnailToUse = (manualThumbnailInput && manualThumbnailInput.value.trim())
+            ? manualThumbnailInput.value.trim()
+            : (pending.thumbnail_url || '');
+
         // 2. API Call
         const res = await apiCall('add_book_edition', {
             isbn: pending.isbn,
             title: pending.title,
             author: pending.author,
             page_count: Number(pending.page_count) || 0,
-            thumbnail_url: pending.thumbnail_url || '',
+            thumbnail_url: thumbnailToUse,
             category: selectedCategory
         });
 
@@ -1972,6 +2113,11 @@ async function confirmAddBookFromPending() {
 
             // Refresh Library
             await fetchLibraryBooks();
+
+            // Refresh current view if it's one that lists books
+            if (['my_books', 'student_dashboard', 'library'].includes(AppState.currentView)) {
+                await navigate(AppState.currentView);
+            }
         } else {
             throw new Error(res?.message || 'Sunucu hata döndürdü.');
         }
@@ -2006,25 +2152,40 @@ async function closeAddBookModal() {
     await stopBarcodeScanner();
     setIsbnFetchLoading(false);
     AppState.data.pendingIsbnBook = null;
+
+    // Reset displays
     const card = document.getElementById('book-confirm-card');
     if (card) {
         card.classList.add('hidden');
         card.innerHTML = '';
     }
+    const searchForm = document.getElementById('add-book-form');
+    if (searchForm) searchForm.classList.remove('hidden');
+    const manualForm = document.getElementById('manual-book-entry-form');
+    if (manualForm) manualForm.classList.add('hidden');
 }
 
 function openAddBookModal() {
     const modal = document.getElementById('add-book-modal');
     if (modal) modal.classList.remove('hidden');
+
     const form = document.getElementById('add-book-form');
-    if (form) form.reset();
+    if (form) {
+        form.reset();
+        form.classList.remove('hidden');
+    }
+
     setIsbnFetchLoading(false);
     AppState.data.pendingIsbnBook = null;
+
+    // Hide sub-cards
     const card = document.getElementById('book-confirm-card');
     if (card) {
         card.classList.add('hidden');
         card.innerHTML = '';
     }
+    const manualForm = document.getElementById('manual-book-entry-form');
+    if (manualForm) manualForm.classList.add('hidden');
 }
 
 async function fetchLibraryBooks() {
