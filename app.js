@@ -2074,40 +2074,58 @@ function renderBookConfirmationCard() {
 
 async function confirmAddBookFromPending() {
     const pending = AppState.data.pendingIsbnBook;
-    if (!pending) {
-        showToast('Önce ISBN ile kitap bilgisi getir.', 'error');
+    const confirmBtn = document.getElementById('confirm-add-book-btn');
+
+    if (!pending || !confirmBtn) {
+        showToast('Kitap bilgisi eksik.', 'error');
         return;
     }
 
-    showToast('Kitap sisteme ekleniyor...', 'info');
+    // 1. Loading State
+    const originalBtnHtml = confirmBtn.innerHTML;
+    confirmBtn.disabled = true;
+    confirmBtn.innerHTML = `<div class="animate-spin rounded-full h-5 w-5 border-2 border-white/30 border-t-white mr-2"></div> Kaydediliyor...`;
+
     try {
         const categorySelect = document.getElementById('confirm-book-category');
         const selectedCategory = categorySelect ? categorySelect.value : (pending.category || 'Diğer');
-        const addRes = await apiCall('add_book_edition', {
+
+        // 2. API Call
+        const res = await apiCall('add_book_edition', {
             isbn: pending.isbn,
             title: pending.title,
             author: pending.author,
-            page_count: pending.page_count,
+            page_count: Number(pending.page_count) || 0,
             thumbnail_url: pending.thumbnail_url || '',
             category: selectedCategory
         });
-        const createdRows = normalizeApiDataArray(addRes);
-        if (createdRows.length === 0) {
-            throw new Error('Book edition insert failed');
-        }
 
-        document.getElementById('add-book-modal').classList.add('hidden');
-        document.getElementById('add-book-form').reset();
-        const card = document.getElementById('book-confirm-card');
-        if (card) {
-            card.classList.add('hidden');
-            card.innerHTML = '';
+        // 3. Status Verification
+        if (res && res.status === 'success') {
+            // Success Path
+            showToast('Kitap başarıyla eklendi!', 'success');
+
+            // UI Cleanup
+            document.getElementById('add-book-modal')?.classList.add('hidden');
+            const card = document.getElementById('book-confirm-card');
+            if (card) {
+                card.classList.add('hidden');
+                card.innerHTML = '';
+            }
+            AppState.data.pendingIsbnBook = null;
+
+            // Refresh Library
+            await fetchLibraryBooks();
+        } else {
+            throw new Error(res?.message || 'Sunucu hata döndürdü.');
         }
-        AppState.data.pendingIsbnBook = null;
-        showToast('Kitap başarıyla sisteme eklendi!', 'success');
-        await renderLibraryView(document.getElementById('view-container'));
     } catch (err) {
         console.error('Add book confirm error:', err);
+        showToast('Kayıt başarısız oldu. Lütfen tekrar deneyin.', 'error');
+
+        // Reset Button State on Error
+        confirmBtn.disabled = false;
+        confirmBtn.innerHTML = originalBtnHtml;
     }
 }
 
