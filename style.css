@@ -31,13 +31,18 @@ html, body {
     }
 }
 
-/* Hide scrollbar for mobile but keep functionality */
-.no-scrollbar::-webkit-scrollbar {
-    display: none;
-}
 .no-scrollbar {
     -ms-overflow-style: none;
     scrollbar-width: none;
+}
+
+.scrollbar-hide {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+    display: none;
 }
 
 /* Animations */

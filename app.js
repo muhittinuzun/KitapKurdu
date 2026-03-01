@@ -1653,9 +1653,9 @@ async function renderLibraryView(container) {
     AppState.data.pendingIsbnBook = null;
 
     container.innerHTML = `
-        <div class="space-y-6 animate-slide-up max-w-2xl mx-auto">
+        <div class="space-y-10 animate-slide-up pb-10">
             <!-- Search & Actions -->
-            <div class="flex gap-2">
+            <div class="max-w-2xl mx-auto flex gap-2">
                 <div class="relative flex-1">
                     <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400"></i>
                     <input type="text" placeholder="Kitap veya yazar ara..." class="w-full pl-10 pr-4 py-3 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-child-primary focus:border-child-primary shadow-sm outline-none transition-all">
@@ -1665,21 +1665,25 @@ async function renderLibraryView(container) {
                 </button>
             </div>
 
-            <!-- Recently Added by Others -->
-            <div>
-                <h3 class="text-lg font-bold text-gray-800 mb-4">Sisteme Yeni Eklenenler</h3>
-                <div id="library-books-grid" class="grid grid-cols-2 md:grid-cols-3 gap-4">
-                    <!-- Loading Skeleton -->
-                    <div class="bg-gray-100 rounded-2xl h-48 animate-pulse"></div>
-                    <div class="bg-gray-100 rounded-2xl h-48 animate-pulse"></div>
+            <!-- Library Content Sections -->
+            <div id="library-content-sections" class="space-y-12">
+                <!-- Loading State / Skeletons -->
+                <div class="px-2">
+                    <div class="h-8 w-48 bg-gray-200 rounded-lg animate-pulse mb-4"></div>
+                    <div class="flex gap-4 overflow-hidden">
+                        <div class="w-36 h-52 bg-gray-100 rounded-2xl animate-pulse shrink-0"></div>
+                        <div class="w-36 h-52 bg-gray-100 rounded-2xl animate-pulse shrink-0"></div>
+                        <div class="w-36 h-52 bg-gray-100 rounded-2xl animate-pulse shrink-0"></div>
+                        <div class="w-36 h-52 bg-gray-100 rounded-2xl animate-pulse shrink-0"></div>
+                    </div>
                 </div>
             </div>
             
-            <div class="bg-indigo-50 rounded-2xl p-5 border border-indigo-100 flex items-start mt-6">
-                <i data-lucide="lightbulb" class="w-6 h-6 text-indigo-500 mr-3 shrink-0 mt-0.5"></i>
+            <div class="max-w-2xl mx-auto bg-indigo-50 rounded-3xl p-6 border border-indigo-100 flex items-start">
+                <i data-lucide="lightbulb" class="w-6 h-6 text-indigo-500 mr-4 shrink-0 mt-1"></i>
                 <div>
-                    <h4 class="font-bold text-indigo-800 text-sm">Aradığın kitabı bulamadın mı?</h4>
-                    <p class="text-xs text-indigo-600 mt-1">Sistemdeki tüm kitaplar senin gibi öğrenciler tarafından ekleniyor. Yukarıdaki "+" butonuna basarak kütüphaneye yeni bir kitap kazandırabilirsin!</p>
+                    <h4 class="font-bold text-indigo-800">Aradığın kitabı bulamadın mı?</h4>
+                    <p class="text-sm text-indigo-600 mt-1">Kütüphanemizdeki tüm kitaplar senin gibi okurlar tarafından ekleniyor. "+" butonuna basarak yeni bir kitap kazandırabilirsin!</p>
                 </div>
             </div>
         </div>
@@ -2190,43 +2194,115 @@ function openAddBookModal() {
 
 async function fetchLibraryBooks() {
     try {
-        const grid = document.getElementById('library-books-grid');
-        if (!grid) return;
+        const sectionsContainer = document.getElementById('library-content-sections');
+        if (!sectionsContainer) return;
 
         const res = await apiCall({
             action: 'get_library_books',
-            data: { limit: 24 }
+            data: { limit: 100 } // Fetch more for grouping
         });
 
-        grid.innerHTML = ''; // Clear skeleton
-        const books = normalizeApiDataArray(res);
-
-        if (books.length === 0) {
-            grid.innerHTML = '<div class="col-span-full text-center text-gray-500 py-6">Henüz kitap eklenmemiş.</div>';
+        const allBooks = normalizeApiDataArray(res);
+        if (allBooks.length === 0) {
+            sectionsContainer.innerHTML = '<div class="text-center text-gray-500 py-12">Henüz kütüphanede kitap bulunmuyor.</div>';
             return;
         }
 
-        books.forEach((b) => {
-            const safeTitle = String(b.title || '').replace(/'/g, "\\'");
-            const safeAuthor = String(b.author || '').replace(/'/g, "\\'");
-            grid.innerHTML += `
-            <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 flex flex-col items-center text-center">
-                <div class="w-20 h-28 rounded-lg shadow-inner mb-3 overflow-hidden border border-slate-100">
-                    ${buildBookCoverHtml(b.thumbnail_url, b.title, 'w-full h-full object-cover')}
-                </div>
-                <h4 class="font-bold text-sm text-gray-900 line-clamp-2">${b.title}</h4>
-                <p class="text-xs text-gray-500 mt-1 line-clamp-1">${b.author || 'Bilinmeyen Yazar'}</p>
-                <div class="flex items-center text-xs text-gray-400 mt-2 bg-gray-50 px-2 py-1 rounded">
-                    <i data-lucide="tag" class="w-3 h-3 mr-1"></i> ${b.category || 'Diğer'}
-                </div>
-                <button onclick="startReadingFromLibrary('${b.isbn || ''}', '${safeTitle}', '${safeAuthor}', ${Number(b.page_count) || 0})" class="w-full mt-3 py-1.5 border border-child-secondary text-child-secondary text-xs rounded-lg font-bold hover:bg-child-secondary hover:text-white transition-colors">Okumaya Başla</button>
-            </div>
-            `;
+        sectionsContainer.innerHTML = ''; // Clear loaders
+
+        // 1. ✨ Yeni Eklenenler (First 10)
+        const newBooks = allBooks.slice(0, 10);
+        sectionsContainer.innerHTML += renderBookRow('✨ Yeni Eklenenler', newBooks);
+
+        // 2. 🔥 En Çok Okunanlar (Sorted by read_count)
+        const popularBooks = [...allBooks]
+            .filter(b => (Number(b.read_count) || 0) > 0)
+            .sort((a, b) => (Number(b.read_count) || 0) - (Number(a.read_count) || 0))
+            .slice(0, 10);
+
+        if (popularBooks.length > 0) {
+            sectionsContainer.innerHTML += renderBookRow('🔥 En Çok Okunanlar', popularBooks);
+        }
+
+        // 3. Kategorisine Göre Kitaplar
+        const categories = {};
+        allBooks.forEach(b => {
+            const cat = b.category || 'Diğer';
+            if (!categories[cat]) categories[cat] = [];
+            categories[cat].push(b);
         });
+
+        // Sort categories to show specific ones first
+        const catOrder = ['Roman', 'Hikaye', 'Bilim', 'Tarih', 'Diğer'];
+        const sortedCats = Object.keys(categories).sort((a, b) => {
+            const idxA = catOrder.indexOf(a);
+            const idxB = catOrder.indexOf(b);
+            if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+            if (idxA !== -1) return -1;
+            if (idxB !== -1) return 1;
+            return a.localeCompare(b);
+        });
+
+        sortedCats.forEach(cat => {
+            sectionsContainer.innerHTML += renderBookRow(`${cat} Kitapları`, categories[cat]);
+        });
+
         lucide.createIcons();
     } catch (err) {
         console.error('Failed to load library:', err);
     }
+}
+
+function renderBookRow(title, books) {
+    if (!books || books.length === 0) return '';
+
+    return `
+        <div class="animate-fade-in px-1">
+            <h2 class="text-xl font-display font-extrabold text-gray-800 mb-5 px-3 flex items-center justify-between">
+                <span>${title}</span>
+                <span class="text-xs font-bold text-child-primary bg-amber-50 px-3 py-1 rounded-full border border-amber-100 uppercase tracking-tighter">Hepsini Gör</span>
+            </h2>
+            <div class="flex flex-row overflow-x-auto gap-5 pb-6 px-3 snap-x snap-mandatory scrollbar-hide">
+                ${books.map(b => renderLibraryBookCard(b)).join('')}
+            </div>
+        </div>
+    `;
+}
+
+function renderLibraryBookCard(b) {
+    const safeTitle = String(b.title || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+    const safeAuthor = String(b.author || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+    const readCount = Number(b.read_count) || 0;
+
+    return `
+        <div class="flex-shrink-0 w-36 sm:w-40 snap-start group">
+            <div class="relative aspect-[3/4] rounded-2xl overflow-hidden shadow-md group-hover:shadow-xl group-hover:-translate-y-1 transition-all duration-300 border border-gray-100 bg-white">
+                ${buildBookCoverHtml(b.thumbnail_url, b.title, 'w-full h-full object-cover')}
+                
+                ${readCount > 5 ? `
+                    <div class="absolute top-2 left-2 bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm">POPÜLER</div>
+                ` : ''}
+
+                <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-3">
+                    <button onclick="startReadingFromLibrary('${b.isbn || ''}', '${safeTitle}', '${safeAuthor}', ${Number(b.page_count) || 0})" 
+                            class="w-full py-2 bg-child-primary text-white text-[11px] font-bold rounded-xl shadow-lg hover:scale-105 transition-transform active:scale-95">
+                        HEMEN OKU
+                    </button>
+                </div>
+            </div>
+            <div class="mt-3 px-1">
+                <h4 class="font-bold text-sm text-gray-800 line-clamp-1 group-hover:text-child-primary transition-colors">${b.title}</h4>
+                <div class="flex items-center justify-between mt-1">
+                    <p class="text-[11px] text-gray-500 line-clamp-1 flex-1">${b.author || 'Bilinmeyen'}</p>
+                    ${readCount > 0 ? `
+                        <p class="text-[10px] font-bold text-amber-600 bg-amber-50 px-1.5 rounded flex items-center shrink-0">
+                            <i data-lucide="eye" class="w-2.5 h-2.5 mr-0.5"></i> ${readCount}
+                        </p>
+                    ` : ''}
+                </div>
+            </div>
+        </div>
+    `;
 }
 
 async function renderAuthorityDashboard(container) {
