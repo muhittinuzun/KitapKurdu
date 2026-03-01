@@ -343,14 +343,14 @@ function renderLoginView(container) {
             });
 
             const users = normalizeApiDataArray(res);
-            if (users.length > 0) {
+            if (users && users.length > 0) {
                 const user = users[0];
                 if (user.auth_status === 'wrong_password') {
-                    showToast('Şifren yanlış görünüyor. Lütfen tekrar dene veya Şifremi Unuttum adımını kullan.', 'error');
+                    showToast('Şifren yanlış görünüyor. Lütfen tekrar dene.', 'error');
                     return;
                 }
                 if (user.auth_status === 'not_found') {
-                    showToast('Bu e-posta ile hesap bulunamadı. İstersen yeni kayıt oluşturabilirsin.', 'error');
+                    showToast('E-posta adresi veya şifre hatalı.', 'error');
                     return;
                 }
                 localStorage.removeItem('kl_login_hint_email');
@@ -368,7 +368,7 @@ function renderLoginView(container) {
                 saveState();
                 applyTheme(AppState.theme);
 
-                showToast('Başarıyla giriş yapıldı!', 'success');
+                showToast(`Hoş geldin, ${user.full_name}!`, 'success');
 
                 if (AppState.user.role === 'student') {
                     await navigate('student_dashboard');
@@ -376,7 +376,7 @@ function renderLoginView(container) {
                     await navigate('authority_dashboard');
                 }
             } else {
-                showToast('E-posta veya şifre yanlış.', 'error');
+                showToast('E-posta adresi veya şifre hatalı.', 'error');
             }
 
         } catch (err) {
@@ -2015,47 +2015,82 @@ function renderBookConfirmationCard() {
 
     card.classList.remove('hidden');
     card.innerHTML = `
-        <h4 class="font-bold text-emerald-900 flex items-center text-base">
-            <i data-lucide="sparkles" class="w-4 h-4 mr-2"></i> Kitap Bilgisi Onayı
+        <h4 class="font-bold text-emerald-900 flex items-center text-lg mb-6 border-b border-emerald-100 pb-3">
+            <i data-lucide="edit-3" class="w-5 h-5 mr-2"></i> Kitap Bilgilerini Onayla
         </h4>
-        <div class="mt-4 flex gap-4">
-            <div class="w-24 h-32 rounded-2xl overflow-hidden border border-emerald-100 bg-white shrink-0 shadow-sm">
-                ${buildBookCoverHtml(pending.thumbnail_url, pending.title)}
-            </div>
-            <div class="flex-1">
-                <p class="font-bold text-gray-900 leading-tight text-lg">${escapeHtml(pending.title)}</p>
-                <p class="text-sm text-gray-600 mt-1">${escapeHtml(pending.author)}</p>
-                <p class="text-xs text-gray-500 mt-2 inline-flex items-center bg-white/80 border border-emerald-100 px-2 py-1 rounded-full">${pending.page_count || 0} sayfa</p>
+        
+        <div class="space-y-5 bg-white p-5 rounded-2xl border border-emerald-50">
+            <!-- Cover and Basic Info -->
+            <div class="flex flex-col sm:flex-row gap-6">
+                <div class="w-32 h-44 mx-auto sm:mx-0 rounded-2xl overflow-hidden shadow-lg border border-gray-100 bg-gray-50 shrink-0">
+                    ${buildBookCoverHtml(pending.thumbnail_url, pending.title, 'w-full h-full object-cover')}
+                </div>
                 
-                ${!pending.thumbnail_url ? `
-                    <div class="mt-3">
-                        <label class="block text-[10px] font-bold text-emerald-800 uppercase tracking-wider mb-1">Kapak Bulunamadı. Görsel Linki Ekle (Opsiyonel)</label>
-                        <input type="url" id="confirm-book-thumbnail" class="w-full px-3 py-2 border border-emerald-200 rounded-xl focus:ring-4 focus:ring-emerald-50 focus:border-emerald-300 bg-white/50 text-xs shadow-inner" placeholder="Pexels, Unsplash veya Google linki...">
+                <div class="flex-1 space-y-4">
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 mb-1.5 ml-1 uppercase tracking-tight">Kitap Adı</label>
+                        <input type="text" id="confirm-title" value="${escapeHtml(pending.title)}" 
+                            class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-base font-bold text-gray-800 transition-all">
                     </div>
-                ` : ''}
+                    
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 mb-1.5 ml-1 uppercase tracking-tight">Yazar</label>
+                        <input type="text" id="confirm-author" value="${escapeHtml(pending.author)}" 
+                            class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-base font-medium text-gray-700 transition-all">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Stats & Category -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div class="bg-gray-50 p-3 rounded-xl border border-gray-100">
+                    <label class="block text-xs font-bold text-gray-500 mb-2 ml-1">SAYFA SAYISI</label>
+                    <div class="flex items-center gap-2">
+                        <i data-lucide="layers" class="w-4 h-4 text-gray-400"></i>
+                        <input type="number" id="confirm-page-count" value="${pending.page_count || 0}" min="1" 
+                            class="flex-1 px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all shadow-sm">
+                    </div>
+                </div>
+                
+                <div class="bg-gray-50 p-3 rounded-xl border border-gray-100">
+                    <label class="block text-xs font-bold text-gray-500 mb-2 ml-1">KATEGORİ</label>
+                    <div class="relative">
+                        <select id="confirm-book-category" 
+                            class="appearance-none w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all shadow-sm">
+                            <option value="Roman" ${pending.category === 'Roman' ? 'selected' : ''}>Roman</option>
+                            <option value="Tarih" ${pending.category === 'Tarih' ? 'selected' : ''}>Tarih</option>
+                            <option value="Bilim" ${pending.category === 'Bilim' ? 'selected' : ''}>Bilim</option>
+                            <option value="Hikaye" ${pending.category === 'Hikaye' ? 'selected' : ''}>Hikaye</option>
+                            <option value="Diğer" ${pending.category === 'Diğer' || !pending.category ? 'selected' : ''}>Diğer</option>
+                        </select>
+                        <i data-lucide="chevron-down" class="w-4 h-4 text-indigo-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none"></i>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-indigo-50/50 p-4 rounded-xl border border-indigo-100">
+                <label class="block text-xs font-bold text-indigo-900 mb-2 ml-1 flex items-center">
+                    <i data-lucide="link-2" class="w-3 h-3 mr-1.5"></i> KAPAK GÖRSEL URL
+                </label>
+                <input type="url" id="confirm-thumbnail" value="${pending.thumbnail_url || ''}" 
+                    class="w-full px-4 py-2.5 bg-white border border-indigo-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-xs text-indigo-700 placeholder-indigo-200 transition-all" 
+                    placeholder="https://...">
             </div>
         </div>
-        <div class="mt-4">
-            <label class="block text-xs font-bold text-gray-700 mb-1">Kategori</label>
-            <div class="relative">
-                <select id="confirm-book-category" class="appearance-none w-full px-4 py-3 border border-emerald-200 rounded-2xl focus:ring-4 focus:ring-emerald-100 focus:border-emerald-400 bg-white text-sm font-medium shadow-sm">
-                    <option value="Roman" ${pending.category === 'Roman' ? 'selected' : ''}>Roman</option>
-                    <option value="Tarih" ${pending.category === 'Tarih' ? 'selected' : ''}>Tarih</option>
-                    <option value="Bilim" ${pending.category === 'Bilim' ? 'selected' : ''}>Bilim</option>
-                    <option value="Hikaye" ${pending.category === 'Hikaye' ? 'selected' : ''}>Hikaye</option>
-                    <option value="Diğer" ${pending.category === 'Diğer' ? 'selected' : ''}>Diğer</option>
-                </select>
-                <i data-lucide="chevrons-up-down" class="w-4 h-4 text-emerald-500 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none"></i>
-            </div>
-        </div>
-        <div class="mt-5">
-            <button id="confirm-add-book-btn" class="w-full py-3.5 rounded-2xl bg-emerald-500 text-white font-bold hover:bg-emerald-600 transition-colors shadow-md flex items-center justify-center">
-                <i data-lucide="check-circle" class="w-5 h-5 mr-2"></i>
+
+        <div class="mt-8">
+            <button id="confirm-add-book-btn" class="w-full py-4 rounded-2xl bg-indigo-600 text-white font-black hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-100 flex items-center justify-center group active:scale-95">
+                <i data-lucide="check-circle-2" class="w-6 h-6 mr-2 group-hover:scale-110 transition-transform"></i>
                 Evet, Kitaplığıma Ekle
             </button>
-            <div class="flex items-center justify-center gap-4 mt-3">
-                <button id="retry-scan-btn" class="text-sm font-semibold text-indigo-600 hover:text-indigo-800 underline underline-offset-2">Tekrar Tara</button>
-                <button id="cancel-confirm-book-btn" class="text-sm font-semibold text-gray-500 hover:text-gray-700">İptal</button>
+            
+            <div class="grid grid-cols-2 gap-4 mt-4">
+                <button id="retry-scan-btn" class="py-2.5 bg-gray-100 text-gray-600 font-bold rounded-xl text-xs hover:bg-gray-200 transition-colors flex items-center justify-center">
+                    <i data-lucide="refresh-cw" class="w-3.5 h-3.5 mr-1.5"></i> Tekrar Tara
+                </button>
+                <button id="cancel-confirm-book-btn" class="py-2.5 bg-white text-red-400 font-bold rounded-xl text-xs border border-red-50 hover:bg-red-50 transition-colors flex items-center justify-center">
+                    İptal Et
+                </button>
             </div>
         </div>
     `;
@@ -2100,20 +2135,27 @@ async function confirmAddBookFromPending() {
     confirmBtn.innerHTML = `<div class="animate-spin rounded-full h-5 w-5 border-2 border-white/30 border-t-white mr-2"></div> Kaydediliyor...`;
 
     try {
+        const title = document.getElementById('confirm-title')?.value.trim() || pending.title;
+        const author = document.getElementById('confirm-author')?.value.trim() || pending.author;
+        const pageCount = Number(document.getElementById('confirm-page-count')?.value) || 0;
         const categorySelect = document.getElementById('confirm-book-category');
         const selectedCategory = categorySelect ? categorySelect.value : (pending.category || 'Diğer');
+        const manualThumbnailInput = document.getElementById('confirm-thumbnail');
+        const thumbnailToUse = manualThumbnailInput ? manualThumbnailInput.value.trim() : (pending.thumbnail_url || '');
 
-        const manualThumbnailInput = document.getElementById('confirm-book-thumbnail');
-        const thumbnailToUse = (manualThumbnailInput && manualThumbnailInput.value.trim())
-            ? manualThumbnailInput.value.trim()
-            : (pending.thumbnail_url || '');
+        if (!title || !author || pageCount <= 0) {
+            showToast('Lütfen tüm zorunlu alanları (Ad, Yazar, Sayfa) geçerli bilgilerle doldurun.', 'warning');
+            confirmBtn.disabled = false;
+            confirmBtn.innerHTML = originalBtnHtml;
+            return;
+        }
 
         // 2. API Call
         const res = await apiCall('add_book_edition', {
             isbn: pending.isbn,
-            title: pending.title,
-            author: pending.author,
-            page_count: Number(pending.page_count) || 0,
+            title: title,
+            author: author,
+            page_count: pageCount,
             thumbnail_url: thumbnailToUse,
             category: selectedCategory
         });
