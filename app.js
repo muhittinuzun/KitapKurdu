@@ -2794,25 +2794,30 @@ async function openBookDetailModal(isbn) {
     const content = document.getElementById('book-detail-content');
     if (!modal || !content) return;
 
+    // 1. ANINDA GÖSTER (Immediate Render)
     modal.classList.remove('hidden');
-    content.innerHTML = `
-        <div class="flex items-center justify-center p-20">
-            <div class="animate-spin rounded-full h-10 w-10 border-4 border-gray-100 border-t-child-primary"></div>
-        </div>
-    `;
 
-    try {
-        // Fetch comments and book details (we might have book info in AppState.libraryBooks)
-        const book = AppState.data.libraryBooks ? AppState.data.libraryBooks.find(b => b.isbn === isbn) : null;
-        const res = await apiCall('get_book_comments', { book_isbn: isbn });
-        const comments = (res && res.status === 'success') ? res.data : [];
+    // Yerel veriden kitabı bul
+    const book = AppState.data.libraryBooks ? AppState.data.libraryBooks.find(b => b.isbn === isbn) : null;
 
-        renderBookDetailModal(book, comments, isbn);
-    } catch (err) {
-        console.error('Modal load error:', err);
-        showToast('Kitap detayları yüklenemedi.', 'error');
-        closeBookDetailModal();
-    }
+    // Temel UI'ı hemen çiz
+    renderBookDetailModalSkeleton(book, isbn);
+
+    // 2. ARKA PLANDA VERİLERİ ÇEK (Background Load)
+    // Okuma durumu ve yorumları paralel çek
+    Promise.allSettled([
+        apiCall('get_book_comments', { book_isbn: isbn }),
+        // Okuma durumunu AppState üzerinden kontrol edeceğiz, ek API'ye gerek kalmayabilir
+    ]).then(([commentsRes]) => {
+        const comments = (commentsRes.status === 'fulfilled' && commentsRes.value?.status === 'success')
+            ? commentsRes.value.data
+            : [];
+
+        updateBookDetailComments(comments, isbn);
+    }).catch(err => {
+        console.error('Async detail load error:', err);
+        updateBookDetailComments([], isbn); // Hata durumunda boş liste göster
+    });
 }
 
 function closeBookDetailModal() {
@@ -2821,25 +2826,59 @@ function closeBookDetailModal() {
     stopVoiceComment(); // Stop recording if active
 }
 
-function renderBookDetailModal(book, comments, isbn) {
+function renderBookDetailModalSkeleton(book, isbn) {
     const content = document.getElementById('book-detail-content');
     if (!content) return;
 
-    const title = book ? book.title : 'Bilinmeyen Kitap';
-    const author = book ? book.author : 'Bilinmeyen Yazar';
-    const coverUrl = book ? book.thumbnail_url : '';
-    const pageCount = book ? (book.page_count || 0) : 0;
-    const readCount = book ? (book.read_count || 0) : 0;
+    const title = book?.title || 'Yükleniyor...';
+    const author = book?.author || 'Lütfen bekleyin';
+    const coverUrl = book?.thumbnail_url || '';
+    const pageCount = Number(book?.page_count) || 0;
+    const readCount = Number(book?.read_count) || 0;
+
+    // Okuma durumu butonu için mantık
+    let actionButton = '';
+    const activeBook = AppState.user?.activeBook;
+    const finishedBooks = AppState.data?.books || [];
+    const isFinished = finishedBooks.some(b => b.isbn === isbn);
+    const isReading = activeBook?.isbn === isbn;
+
+    if (isReading) {
+        const progress = activeBook.total_pages > 0 ? Math.round((activeBook.pages_read / activeBook.total_pages) * 100) : 0;
+        actionButton = `
+            <div class="mt-4 px-4 py-3 bg-amber-100 border border-amber-200 rounded-2xl flex items-center justify-between">
+                <div class="flex items-center">
+                    <i data-lucide="book-open" class="w-5 h-5 text-amber-600 mr-2"></i>
+                    <span class="text-sm font-bold text-amber-900">📖 Şu an okuyorsun (%${progress})</span>
+                </div>
+                <button onclick="navigate('student_dashboard'); closeBookDetailModal();" class="text-xs font-bold bg-amber-500 text-white px-3 py-1.5 rounded-xl">GÜNCELLE</button>
+            </div>
+        `;
+    } else if (isFinished) {
+        actionButton = `
+            <div class="mt-4 px-4 py-3 bg-green-50 border border-green-100 rounded-2xl flex items-center">
+                <i data-lucide="check-circle" class="w-5 h-5 text-green-500 mr-2"></i>
+                <span class="text-sm font-bold text-green-800">✅ Bu kitabı okudun</span>
+            </div>
+        `;
+    } else {
+        actionButton = `
+            <button onclick="startReadingFromLibrary('${isbn}', '${title.replace(/'/g, "\\'")}', '${author.replace(/'/g, "\\'")}', ${pageCount}); closeBookDetailModal();" 
+                class="mt-4 w-full py-3 bg-child-primary text-white font-bold rounded-2xl shadow-lg hover:scale-[1.02] transition-transform active:scale-95 flex items-center justify-center">
+                OKUMAYA BAŞLA
+            </button>
+        `;
+    }
 
     content.innerHTML = `
         <div class="animate-fade-in overflow-y-auto max-h-[90vh]">
             <!-- Header with Cover -->
             <div class="relative bg-gradient-to-br from-amber-50 to-indigo-50 p-6 sm:p-8 pt-12">
                 <div class="flex flex-col sm:flex-row items-center gap-6 sm:gap-8">
-                    <div class="w-32 sm:w-40 aspect-[3/4] rounded-2xl overflow-hidden shadow-2xl border-4 border-white rotate-1 hover:rotate-0 transition-transform duration-500 shrink-0">
+                    <div class="w-32 sm:w-40 aspect-[3/4] rounded-2xl overflow-hidden shadow-2xl border-4 border-white rotate-1 hover:rotate-0 transition-transform duration-500 shrink-0 bg-gray-100">
                         ${buildBookCoverHtml(coverUrl, title, 'w-full h-full object-cover')}
                     </div>
-                    <div class="text-center sm:text-left">
+                    <div class="text-center sm:text-left flex-1">
                         <h2 class="text-2xl sm:text-3xl font-display font-black text-gray-800 leading-tight">${title}</h2>
                         <p class="text-lg text-gray-600 mt-2 font-medium">${author}</p>
                         <div class="flex flex-wrap justify-center sm:justify-start gap-3 mt-4">
@@ -2850,39 +2889,33 @@ function renderBookDetailModal(book, comments, isbn) {
                                 <i data-lucide="eye" class="w-3 h-3 mr-1.5"></i> ${readCount} Okunma
                             </span>
                         </div>
+                        <div id="book-action-area">
+                            ${actionButton}
+                        </div>
                     </div>
                 </div>
             </div>
 
             <!-- Comments Section -->
-            <div class="p-6 sm:p-8 bg-white">
-                <div class="flex items-center justify-between mb-6">
+            <div class="p-6 sm:p-8 bg-white pb-24">
+                <div class="flex items-center justify-between mb-6 border-b border-gray-100 pb-4">
                     <h3 class="text-xl font-display font-bold text-gray-800">Okur Yorumları</h3>
-                    <span class="text-sm font-bold text-gray-400 font-sans">${comments.length} yorum</span>
+                    <span id="comments-count" class="text-sm font-bold text-gray-400 font-sans">Yükleniyor...</span>
                 </div>
 
                 <div id="comments-list" class="space-y-4 mb-8">
-                    ${comments.length > 0 ? comments.map(c => `
-                        <div class="bg-gray-50 rounded-2xl p-4 border border-gray-100 animate-slide-up">
-                            <div class="flex items-center justify-between mb-2">
-                                <span class="font-bold text-sm text-gray-800">${c.full_name}</span>
-                                <span class="text-[10px] text-gray-400">${new Date(c.created_at).toLocaleDateString('tr-TR')}</span>
-                            </div>
-                            <p class="text-sm text-gray-600 leading-relaxed">${c.comment_text}</p>
-                        </div>
-                    `).join('') : `
-                        <div class="text-center py-10 opacity-60">
-                            <i data-lucide="message-square" class="w-12 h-12 mx-auto text-gray-300 mb-3"></i>
-                            <p class="text-gray-500 font-medium italic">İlk yorumu sen yap!</p>
-                        </div>
-                    `}
+                    <!-- Loading Skeletons -->
+                    <div class="animate-pulse space-y-4">
+                        <div class="h-20 bg-gray-50 rounded-2xl border border-gray-100"></div>
+                        <div class="h-20 bg-gray-50 rounded-2xl border border-gray-100"></div>
+                    </div>
                 </div>
 
-                <!-- Add Comment Area -->
-                <div class="mt-8 border-t border-gray-100 pt-8">
+                <!-- Add Comment Area (Always visible) -->
+                <div class="mt-8 pt-6 border-t border-gray-100">
                     <div class="relative group">
                         <textarea id="comment-textarea" 
-                            class="w-full bg-gray-50 border border-gray-200 rounded-2xl p-4 pr-14 min-h-[100px] outline-none focus:ring-2 focus:ring-child-primary focus:border-child-primary transition-all resize-none shadow-inner"
+                            class="w-full bg-gray-50 border border-gray-200 rounded-2xl p-4 pr-14 min-h-[100px] outline-none focus:ring-2 focus:ring-child-primary focus:border-child-primary transition-all resize-none shadow-inner text-sm"
                             placeholder="Kitap hakkındaki düşüncelerini yaz..."></textarea>
                         
                         <button id="voice-comment-btn" onclick="toggleVoiceComment()" 
@@ -2892,7 +2925,7 @@ function renderBookDetailModal(book, comments, isbn) {
                     </div>
                     <div class="flex justify-end mt-3">
                         <button onclick="submitComment('${isbn}')" 
-                            class="px-6 py-2.5 bg-child-primary text-white font-bold rounded-xl shadow-lg shadow-amber-200 hover:scale-105 active:scale-95 transition-all text-sm">
+                            class="px-8 py-3 bg-gray-900 text-white font-bold rounded-2xl shadow-lg hover:bg-black active:scale-95 transition-all text-sm">
                             Yorumu Paylaş
                         </button>
                     </div>
@@ -2900,6 +2933,36 @@ function renderBookDetailModal(book, comments, isbn) {
             </div>
         </div>
     `;
+    lucide.createIcons();
+}
+
+function updateBookDetailComments(comments, isbn) {
+    const listContainer = document.getElementById('comments-list');
+    const countSpan = document.getElementById('comments-count');
+    if (!listContainer || !countSpan) return;
+
+    countSpan.textContent = `${comments?.length || 0} yorum`;
+
+    if (!comments || comments.length === 0) {
+        listContainer.innerHTML = `
+            <div class="text-center py-10 opacity-60">
+                <div class="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-3">
+                    <i data-lucide="message-square" class="w-8 h-8 text-gray-300"></i>
+                </div>
+                <p class="text-gray-500 font-medium italic">Henüz yorum yapılmamış. İlk yorumu sen yap!</p>
+            </div>
+        `;
+    } else {
+        listContainer.innerHTML = comments.map(c => `
+            <div class="bg-gray-50/50 rounded-2xl p-4 border border-gray-100/80 animate-slide-up">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="font-bold text-sm text-gray-800">${c?.full_name || 'Gizli Okur'}</span>
+                    <span class="text-[10px] text-gray-400 font-medium">${c?.created_at ? new Date(c.created_at).toLocaleDateString('tr-TR') : ''}</span>
+                </div>
+                <p class="text-sm text-gray-600 leading-relaxed">${c?.comment_text || ''}</p>
+            </div>
+        `).join('');
+    }
     lucide.createIcons();
 }
 
