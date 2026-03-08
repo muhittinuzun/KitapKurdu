@@ -1633,14 +1633,11 @@ async function loadBadgeProgressData() {
     const books = await loadMyBooksData();
     const finishedBooksCount = books.filter((b) => b.finished).length;
 
-    const logs = Array.isArray(AppState.data.recentReadLogs) ? AppState.data.recentReadLogs : [];
-    const readingLogs = logs.filter((log) => (Number(log.pages_read) || 0) > 0);
-    const totalPages = readingLogs.reduce((sum, log) => sum + (Number(log.pages_read) || 0), 0);
-    const streakDays = calculateReadingStreak(readingLogs);
+    const dashboardStats = await loadDashboardStats();
 
     const metrics = {
-        total_pages: totalPages,
-        read_streak: streakDays,
+        total_pages: dashboardStats.total_pages || 0,
+        read_streak: dashboardStats.streak_days || 0,
         total_books: finishedBooksCount
     };
 
@@ -2424,12 +2421,15 @@ async function fetchLibraryBooks() {
         const sectionsContainer = document.getElementById('library-content-sections');
         if (!sectionsContainer) return;
 
-        const res = await apiCall({
-            action: 'get_library_books',
-            data: { limit: 100 } // Fetch more for grouping
-        });
+        // Fetch Yeni Eklenenler (order: 'newest') and En Çok Okunanlar (order: 'popular') concurrently
+        const [newRes, popRes] = await Promise.all([
+            apiCall({ action: 'get_library_books', data: { limit: 100, order: 'newest' } }),
+            apiCall({ action: 'get_library_books', data: { limit: 20, order: 'popular' } })
+        ]);
 
-        const allBooks = normalizeApiDataArray(res);
+        const allBooks = normalizeApiDataArray(newRes);
+        const popularBooksData = normalizeApiDataArray(popRes);
+
         AppState.data.libraryBooks = allBooks; // Store for modal access
 
         if (allBooks.length === 0) {
@@ -2439,16 +2439,12 @@ async function fetchLibraryBooks() {
 
         sectionsContainer.innerHTML = ''; // Clear loaders
 
-        // 1. ✨ Yeni Eklenenler (First 10)
-        const newBooks = allBooks.slice(0, 10);
+        // 1. ✨ Yeni Eklenenler (First 20 instead of 10)
+        const newBooks = allBooks.slice(0, 20);
         sectionsContainer.innerHTML += renderBookRow('✨ Yeni Eklenenler', newBooks);
 
-        // 2. 🔥 En Çok Okunanlar (Sorted by read_count)
-        const popularBooks = [...allBooks]
-            .filter(b => (Number(b.read_count) || 0) > 0)
-            .sort((a, b) => (Number(b.read_count) || 0) - (Number(a.read_count) || 0))
-            .slice(0, 10);
-
+        // 2. 🔥 En Çok Okunanlar (Real popular slice from the specific query)
+        const popularBooks = popularBooksData.filter(b => (Number(b.read_count) || 0) > 0);
         if (popularBooks.length > 0) {
             sectionsContainer.innerHTML += renderBookRow('🔥 En Çok Okunanlar', popularBooks);
         }
@@ -2934,6 +2930,8 @@ async function logReading(newPage, noteText, isCorrection = false) {
         if (confirmed) {
             isFinished = true;
             finalNote = finalNote ? `[KT_EVENT]FINISH ${finalNote}` : '[KT_EVENT]FINISH';
+            // Kitap bittiğinde kullanıcının kalıcı seçimini sıfırla ki anasayfa yenilendiğinde bu kitap "aktif" olarak görünmesin.
+            AppState.data.preferredActiveIsbn = null;
         }
     }
 

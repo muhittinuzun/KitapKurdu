@@ -66,9 +66,10 @@ else if (action === 'add_book_edition') {
   params = [data.title, data.author || null, data.category || null, data.isbn, Number(data.page_count), data.thumbnail_url || null];
 }
 else if (action === 'get_library_books') {
-  // Anti Graviti Optimizasyonu (Performans + Sayfalama)
-  query = `SELECT e.isbn, b.title, b.author, e.page_count, b.category, e.thumbnail_url, COUNT(DISTINCT r.user_id)::int as read_count FROM k_t_book_editions e JOIN k_t_books b ON e.book_id = b.id LEFT JOIN k_t_read_logs r ON e.isbn = r.book_isbn GROUP BY e.isbn, b.title, b.author, e.page_count, b.category, e.thumbnail_url ORDER BY e.isbn DESC LIMIT $1 OFFSET $2`;
-  params = [Number(data.limit) || 50, Number(data.offset) || 0];
+  // Anti Graviti Optimizasyonu (Performans + Sayfalama + Sıralama)
+  const orderClause = data.order === 'popular' ? 'ORDER BY read_count DESC, b.id DESC' : 'ORDER BY b.id DESC';
+  query = \`SELECT e.isbn, b.title, b.author, e.page_count, b.category, e.thumbnail_url, COUNT(DISTINCT r.user_id)::int as read_count FROM k_t_book_editions e JOIN k_t_books b ON e.book_id = b.id LEFT JOIN k_t_read_logs r ON e.isbn = r.book_isbn GROUP BY e.isbn, b.title, b.author, e.page_count, b.category, e.thumbnail_url \${orderClause} LIMIT $1 OFFSET $2\`;
+  params = [Number(data.limit) || 100, Number(data.offset) || 0];
 }
 else if (action === 'get_user_books') {
   // Anti Graviti Optimizasyonu (Finished ve Dropped Bayrakları, 0 sayfalık başlangıç logları dahil)
