@@ -955,9 +955,9 @@ async function renderStudentDashboard(container) {
 
     const activeBook = AppState.data.activeBook;
     const hasActiveBook = Boolean(activeBook && activeBook.edition_id);
-    const safePageCount = Math.max(1, Number(activeBook.page_count) || 1);
-    const safeCurrentPage = Math.min(Math.max(Number(activeBook.current_page) || 0, 0), safePageCount);
-    const progressPercent = Math.round((safeCurrentPage / safePageCount) * 100);
+    const safePageCount = hasActiveBook ? Math.max(1, Number(activeBook.page_count) || 1) : 1;
+    const safeCurrentPage = hasActiveBook ? Math.min(Math.max(Number(activeBook.current_page) || 0, 0), safePageCount) : 0;
+    const progressPercent = hasActiveBook ? Math.round((safeCurrentPage / safePageCount) * 100) : 0;
     const readBooksCount = Number(dashboardStats.read_books_count) || 0;
     const streakDays = Number(dashboardStats.streak_days) || 0;
     const totalPages = Number(dashboardStats.total_pages) || 0;
