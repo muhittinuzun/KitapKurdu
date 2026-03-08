@@ -931,8 +931,8 @@ async function loadStudentActiveBook() {
         }
 
         if (!active) {
-            // En son okunan ve bitmemiş olanı aktif seç, yoksa listendeki ilk kitabı ver
-            active = books.find(b => !b.finished && !b.dropped) || (books.length > 0 ? books[0] : null);
+            // Sadece bitmemiş olanı aktif seç, bitmişse null dönsün
+            active = books.find(b => !b.finished && !b.dropped) || null;
         }
 
         AppState.data.activeBook = active;
