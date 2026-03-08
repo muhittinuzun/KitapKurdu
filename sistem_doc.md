@@ -1,140 +1,100 @@
 # Kitap Ligi - Sistem Dokümantasyonu
 
-> **Son güncelleme:** 8 Mart 2026
+> **Son guncelleme:** 8 Mart 2026 (MVP Checkpoint - tekil surum)
 
-## 1) Dokümanın Amacı
+## 1) Amac
 
-Bu dosya proje için "checkpoint/sigorta" kaydıdır. Mimari kararlar, canlı sözleşmeler ve müdahale noktaları burada tutulur. Yeni bir ekip, farklı bir yapay zeka veya iş analisti projeye buradan girip hızlıca doğru yerde müdahale edebilmelidir.
+Bu dokuman, projenin teknik gercegini tek kaynaktan anlatir. Yeni gelen ekipler bu dosya ile:
 
----
+- mimari sinirlari,
+- canli API davranisini,
+- kritik UX standartlarini,
+- bilinen riskleri
 
-## 2) Checkpoint Özeti (Güncel Durum)
-
-Proje mock/prototipten gerçek MVP akışına geçmiş ve aktif olarak kullanılmaktadır.
-
-### Tamamlanan Özellikler
-
-| Alan | Durum | Açıklama |
-|------|-------|----------|
-| Kayıt / Giriş | ✅ Canlı | Join-code ve manuel seçim (İl → İlçe → Okul → Sınıf) ile kayıt, e-posta/şifre ile giriş |
-| Öğrenci Dashboard | ✅ Canlı | Aktif kitap okuma kartı, istatistikler (toplam sayfa, kitap, seri), sayfa kayıt modalı |
-| Kitaplarım | ✅ Canlı | `get_user_books` API ile kapak görselli, ilerleme çubuklu kitap listesi; "okunan / bitirilen / bırakılan" sekmeleri |
-| Kütüphane (Keşfet) | ✅ Canlı | Tüm kitaplar grid/liste görünümü, arama, ISBN ile kitap ekleme modalı, kitap detay modalı |
-| Rozet Sistemi | ✅ Canlı | `sync_user_badges` ile backend kalıcılık; renkli/kilitli kart görünümü; confetti animasyonu |
-| Sıralama | ✅ Canlı | Sınıf bazlı `leaderboard_group` sıralaması |
-| Yönetici Paneli | ✅ Canlı | Toplam sayfa, aktif/toplam öğrenci, farklı kitap; aylık trend grafiği (Chart.js) |
-| Öğrenci Listesi | ✅ Canlı | Yönetici için öğrenci tablosu (ad, e-posta, toplam sayfa, kitap sayısı) |
-| Kitap Detay & Yorum | ✅ Canlı | Modal tabanlı kitap detay; yorum ekleme; sesli yorum (`webkitSpeechRecognition`) |
-| ISBN Fallback Zinciri | ✅ Canlı | Lokal DB → Google Books → Kitapyurdu → D&R → Nihai Kontrol (4 kademeli) |
-| Kitap Yaşam Döngüsü | ✅ Canlı | Başlat (`[KT_EVENT]START`), bitir (`[KT_EVENT]FINISH`), bırak (`[KT_EVENT]DROP`) |
-| Manuel Kitap Girişi | ✅ Canlı | ISBN bulunamadığında kullanıcı kitap bilgilerini elle girebilir |
-| Barkod Tarama | ✅ Canlı | `html5-qrcode` kütüphanesi ile kameradan ISBN okutma |
-| Geri Alma (Undo) | ⚠️ Kısmen | Frontend simülasyonu mevcut, backend `undo_read_log` aksiyonu henüz tanımlı değil |
-| Raporlar (Yönetici) | ⚠️ Stub | `renderAuthorityReportsView` fonksiyonu dashboard'u tekrar render eder, gerçek rapor özelliği yok |
-| Ayarlar (Yönetici) | ⚠️ Minimal | Sadece profil bilgilerini (read-only) gösterir, düzenleme yok |
-
-### Teknoloji Yığını
-
-- **Frontend**: `index.html` + `app.js` + `style.css` (no-build, Tailwind CDN + Lucide Icons + Chart.js + Canvas Confetti + html5-qrcode)
-- **Backend**: n8n webhook (`api_akisi.json`) → PostgreSQL
-- **Fontlar**: Inter + Outfit (Google Fonts)
-- **Tema**: Child (amber) ve Academic (slate/indigo) — role-based otomatik
+hizlica anlayabilmelidir.
 
 ---
 
-## 3) Değiştirilemez Temel Kurallar
+## 2) Canli Durum Ozeti
+
+- Uygulama no-build yapidadir: `index.html`, `app.js`, `style.css`.
+- Backend tek n8n webhook akisi uzerinden calisir (`api_akisi.json`).
+- ISBN fallback zinciri canli: **Lokal -> Google -> Kitapyurdu -> D&R -> Nihai kontrol**.
+- Kitap ekleme modalinda barkod okuma (`html5-qrcode`), spinner, duzenlenebilir onay karti ve manuel giris akisi vardir.
+- Rozet kazanimi backendde hesaplanir ve `k_t_user_badges` tablosuna kalici yazilir.
+- Mobilde sol sidebar kapali, ana navigasyon `mobile-bottom-nav` uzerindendir.
+
+---
+
+## 3) Degistirilemez Kurallar
 
 1. **Mimari**
-   - Build sistemi yoktur. Sadece `index.html`, `app.js`, `style.css`.
-   - UI render yaklaşımı `app.js` içinde view tabanlıdır (SPA-like `navigate()` fonksiyonu).
+   - Build sistemi yok.
+   - Render akisi `app.js` icindeki view tabanli yonlendirme ile yurur.
 
 2. **Backend**
-   - Tüm veri işlemleri tek webhook üzerinden (`POST`).
-   - SQL üretimi n8n içindeki `Smart SQL Builder` node'unda yapılır.
+   - Tum istekler tek webhook endpointine `POST` edilir.
+   - SQL uretilmesi `Smart SQL Builder` icinde merkezidir.
 
-3. **Veri Modeli Namusu**
-   - `k_t_books`: kitabın genel künyesi (title, author, category).
-   - `k_t_book_editions`: ISBN/sayfa sayısı gibi baskı bilgisi.
-   - `k_t_read_logs`: ISBN üzerinden okuma olayları + yaşam döngüsü event'leri (`[KT_EVENT]` prefix).
-   - `k_t_book_comments`: kitap yorumları (status bazlı: `approved` / `pending`).
+3. **Veri modeli sinirlari**
+   - `k_t_books`: kitap kimligi ve genel metadata.
+   - `k_t_book_editions`: ISBN, sayfa sayisi, kapak URL gibi baski verisi.
+   - `k_t_read_logs`: okuma hareketleri ve `[KT_EVENT]` notlari.
+   - `k_t_user_badges`: kazanilan rozetlerin kalici kaydi.
 
-4. **UX Kuralı (Sayfa Takibi)**
-   - Kullanıcıya "Şu an kaçıncı sayfadasın?" sorulur.
-   - `app.js` farkı hesaplayıp `pages_read` olarak backend'e gönderir.
+4. **Okuma UX kurali**
+   - Kullaniciya "su an kacinci sayfadasin?" sorulur.
+   - `pages_read` farki frontendde hesaplanip `log_read` ile gonderilir.
 
 ---
 
-## 4) Dosya Bazlı Sorumluluklar
+## 4) Dosya Sorumluluklari
 
-### `index.html` (148 satır)
-- Uygulama iskeleti: header, sidebar (desktop), mobile bottom nav, view container, toast container.
-- CDN'ler: Tailwind CSS, Lucide Icons, Chart.js, Canvas Confetti, html5-qrcode, Google Fonts.
-- `html5-qrcode` kamera tabanlı ISBN okutma desteği.
+### `index.html`
+- Uygulama iskeleti (header, desktop sidebar, mobile bottom nav, view alanlari).
+- CDN bagimliliklari: Tailwind, Lucide, Chart.js, Canvas Confetti, `html5-qrcode`.
 
-### `style.css` (178 satır)
-- Özel animasyonlar: `slideUp`, `fadeIn`, `float`, `pulse-ring`, `pulse-red`.
-- Glassmorphism utility (`.glass`).
-- Mobilde sidebar'ı zorunlu gizleyen kural (`#desktop-sidebar { display: none !important; }`).
-- Safe-area-inset (mobil browser çentik uyumu).
-- Chart container kısıtlamaları.
+### `style.css`
+- Animasyonlar, UI yardimcilari ve responsive davranislar.
+- Mobilde `#desktop-sidebar { display: none !important; }` kuraliyla sidebar zorunlu kapatilir.
 
-### `app.js` (3116 satır, 93 fonksiyon)
+### `app.js`
+- State yonetimi, route/render akisi, API istemcisi, ekranlar ve modal davranislari.
+- Premium modal UX:
+  - ISBN manuel veya kamera ile girilir,
+  - arama yuklenme gostergesi acilir,
+  - sonuc varsa duzenlenebilir onay karti acilir,
+  - sonuc yoksa manuel kitap girisi acilir.
 
-| Kategori | Fonksiyonlar |
-|----------|-------------|
-| **Başlatma** | `initApp`, `loadState`, `saveState`, `checkAuth` |
-| **API** | `apiCall`, `normalizeApiDataArray`, `normalizeRole` |
-| **Routing** | `navigate` (11 view case) |
-| **Auth Ekranları** | `renderLoginView`, `renderRegisterView`, `resolveJoinCode`, `loadGroups`, `resetDownstreamSelects`, `enableFinalForm`, `disableFinalForm` |
-| **Öğrenci Ekranları** | `renderStudentDashboard`, `renderMyBooksView`, `renderLeaderboardView`, `renderBadgesView`, `renderLibraryView` |
-| **Kitap Detay & Yorum** | `openBookDetailModal`, `closeBookDetailModal`, `renderBookDetailModalSkeleton`, `updateBookDetailComments`, `submitComment` |
-| **Sesli Yorum** | `toggleVoiceComment`, `startVoiceComment`, `stopVoiceComment`, `updateVoiceBtnUI` |
-| **Kitap Ekleme** | `openAddBookModal`, `closeAddBookModal`, `fetchBookByIsbnForConfirm`, `renderBookConfirmationCard`, `confirmAddBookFromPending`, `showManualBookEntryForm`, `saveManualBookEntry`, `setIsbnFetchLoading` |
-| **Barkod** | `startBarcodeScanner`, `stopBarcodeScanner` |
-| **Okuma İşlemleri** | `logReading`, `undoLastReadAction`, `openReadingLogModal`, `closeReadingLogModal`, `startReadingForIsbn`, `startReadingFromLibrary`, `removeFromActiveList`, `markBookAsFinished`, `openFinishDateModal`, `closeFinishDateModal`, `submitFinishDateModal` |
-| **Rozet** | `loadBadgeProgressData`, `syncBadgeAchievements`, `renderBadgesView` |
-| **Kütüphane** | `fetchLibraryBooks`, `renderBookRow`, `renderLibraryBookCard` |
-| **Yönetici** | `renderAuthorityDashboard`, `renderAuthorityReportsView`, `renderAuthorityStudentsView`, `renderAuthoritySettingsView` |
-| **UI Yardımcıları** | `updateNavigationUI`, `applyTheme`, `setupEventListeners`, `showToast`, `buildBookCoverHtml`, `escapeHtml`, `getGroupNameById`, `getTodayISODate`, `parseReadLogEvent`, `startSpeechToText` |
-| **Diğer** | `logout`, `loadDashboardStats`, `calculateReadingStreak`, `loadMyBooksData`, `loadStudentActiveBook` |
-
-### `api_akisi.json` (n8n workflow - 539 satır)
-
-**Genel Mimari:**
-```
-Webhook → Action Yönlendirici
-  ├── [fetch_book_by_isbn] → Lokal DB → Bizde Var Mı?
-  │     ├── [Evet] → Lokalden Dön
-  │     └── [Hayır] → Google Books API → Google Verisi → Google Yeterli Mi?
-  │           ├── [Evet] → Nihai Kontrol → API Cevabı Dön
-  │           └── [Hayır] → Kitapyurdu Arama → Kitapyurdu Format → Kitapyurdu Yeterli Mi?
-  │                 ├── [Evet] → Nihai Kontrol → API Cevabı Dön
-  │                 └── [Hayır] → D&R Arama → D&R Format → Nihai Kontrol → API Cevabı Dön
-  └── [Diğer aksiyonlar] → Smart SQL Builder → Universal Executor → Respond Success
-```
-
-### `fix_api.py` (184 satır)
-- `api_akisi.json` içindeki Smart SQL Builder jsCode'unu güvenli şekilde güncellemek için bir yardımcı Python scripti.
-- Doğrudan çalıştırılması gereken bir production dosyası değildir.
+### `api_akisi.json`
+- `fetch_book_by_isbn` icin ozel fallback hattini tasir.
+- Diger aksiyonlarda `Smart SQL Builder -> Universal Executor -> Respond Success` hattini kullanir.
 
 ### `DATABASE_SCHEMA.md`
-- 7 tablo tanımı + ilişkiler (bkz. Bölüm 5.4).
+- Tablo ve iliski referansi.
+
+### `fix_api.py`
+- `api_akisi.json` icindeki `Smart SQL Builder` kodunu guvenli sekilde guncellemek icin yardimci script.
 
 ---
 
-## 5) API Sözleşmesi (Canlı)
+## 5) API Sozlesmesi ve Cagri Standardi
 
-### 5.1 Standart Request
+### 5.1 Request/Response Cercevesi
+
+Request:
+
 ```json
 {
   "action": "string",
-  "resource": "string (opsiyonel, oto-resolve edilir)",
+  "resource": "string (opsiyonel)",
   "data": {},
-  "user_id": "uuid (auth durumunda otomatik inject)"
+  "user_id": "uuid (varsa)"
 }
 ```
 
-### 5.2 Standart Response
+Response:
+
 ```json
 {
   "status": "success",
@@ -143,194 +103,101 @@ Webhook → Action Yönlendirici
 }
 ```
 
-### 5.3 n8n'de Aktif Aksiyonlar
+### 5.2 Frontend Cagri Standardi
 
-| Aksiyon | Resource (oto) | Açıklama |
-|---------|---------------|----------|
-| `get_groups` | `k_t_groups` | Hiyerarşik grup listesi (il/ilçe/okul/sınıf) |
-| `resolve_code` | `k_t_groups` | Katılım kodu ile sınıf çözümleme |
-| `login` | `k_t_users` | E-posta + şifre ile giriş |
-| `register` | `k_t_users` | Yeni kullanıcı kaydı (mevcut kontrollü) |
-| `add_book_edition` | `k_t_book_editions` | ISBN ile kitap ekleme (upsert) |
-| `get_library_books` | `k_t_book_editions` | Kütüphane listesi (sayfalı) |
-| `get_user_books` | `k_t_read_logs` | Kullanıcının kitapları (ilerleme + durum) |
-| `log_read` | `k_t_read_logs` | Okuma kaydı ekleme |
-| `dashboard_stats` | `k_t_read_logs` | Öğrenci istatistikleri (streak dahil) |
-| `leaderboard_group` | `k_t_read_logs` | Sınıf sıralaması |
-| `authority_stats` | `k_t_read_logs` | Yönetici genel istatistikler |
-| `authority_students` | `k_t_read_logs` | Tüm öğrenci listesi |
-| `sync_user_badges` | `k_t_user_badges` | Rozet hesaplama + kalıcılık |
-| `fetch_book_by_isbn` | *(özel akış)* | 4 kademeli ISBN arama |
-| `get_book_comments` | `k_t_book_comments` | Kitap yorumlarını getir (onaylılar) |
-| `add_comment` | `k_t_book_comments` | Yeni yorum ekle |
-| `read` | *(dinamik)* | Genel okuma sorgusu (field/filter/order/limit/offset) |
+Kod tabaninda standart kullanim:
 
-### 5.4 Whitelist Tabloları
+- `apiCall('fetch_book_by_isbn', { isbn })`
+- `apiCall('add_book_edition', { isbn, title, author, page_count, thumbnail_url, category })`
 
-| Tablo | Açıklama |
-|-------|----------|
-| `k_t_groups` | İl/ilçe/okul/sınıf hiyerarşisi |
-| `k_t_users` | Kullanıcılar |
-| `k_t_read_logs` | Okuma geçmişi + yaşam döngüsü |
-| `k_t_badges` | Rozet tanımları |
-| `k_t_books` | Kitap genel bilgileri |
-| `k_t_book_editions` | Kitap basımları (ISBN PK) |
-| `k_t_user_badges` | Kazanılan rozetler |
-| `k_t_book_comments` | Kitap yorumları |
+Not: `apiCall` fonksiyonu hem bu kisayolu hem de `{ action, resource, data }` formunu destekler; ekip standardi string action + data objesi formatidir.
 
-### 5.5 `fetch_book_by_isbn` Fallback Zinciri
+### 5.3 Aktif aksiyonlar (ozet)
 
-```
-1. Lokal DB Kontrolü (k_t_book_editions + k_t_books JOIN)
-   ↓ bulamadıysa
-2. Google Books API (googleapis.com/books/v1/volumes)
-   → title + thumbnail varsa → Nihai Kontrol
-   → eksikse ↓
-3. Kitapyurdu Arama (kitapyurdu.com HTML scrape)
-   → title + thumbnail varsa → Nihai Kontrol
-   → eksikse ↓
-4. D&R Arama (dr.com.tr HTML scrape)
-   → Nihai Kontrol
-```
-
-**Nihai Kontrol**: title varsa `status: success`, yoksa `status: error` + `"Kitap hiçbir kaynakta bulunamadı"`.
+- `get_groups`, `resolve_code`, `login`, `register`
+- `add_book_edition`, `get_library_books`, `get_user_books`
+- `log_read`, `undo_read_log`
+- `dashboard_stats`, `leaderboard_group`, `authority_stats`, `authority_students`
+- `sync_user_badges`
+- `fetch_book_by_isbn`
+- `get_book_comments`, `add_comment`, `read`
 
 ---
 
-## 6) Rozet Sistemi
+## 6) ISBN Fallback Akisi (Canli Gercek)
 
-### 6.1 Frontend
-- `renderBadgesView()` + `loadBadgeProgressData()` + `syncBadgeAchievements()`.
-- Kazanılan rozetler: renkli/gradyan kart, büyük ikon.
-- Kilitli rozetler: beyaz zemin, ilerleme barı.
-- Tema: `total_pages` → mavi, `read_streak` → mor, `total_books` → yeşil.
+`fetch_book_by_isbn` isteginde:
 
-### 6.2 Backend Kalıcılık
-- `sync_user_badges` aksiyonu:
-  1. `k_t_read_logs` üzerinden metrikler hesaplanır (total_pages, total_books via FINISH event, read_streak).
-  2. `k_t_badges` kurallarıyla eşleştirilir.
-  3. Yeni kazanımlar `k_t_user_badges`'e yazılır.
-  4. `newly_earned` bilgisiyle frontend'e döner.
+1. Lokal DB (`k_t_book_editions` + `k_t_books`) sorgulanir.
+2. Yetersizse Google Books denenir.
+3. Hala yetersizse Kitapyurdu HTML parse edilir.
+4. Hala yetersizse D&R HTML parse edilir.
+5. Nihai kontrolde `title` varsa basari, yoksa hata donulur.
+
+Bu zincirin node baglantilari kirilmamali; fallback sirasi sabittir.
 
 ---
 
-## 7) Kitap Yaşam Döngüsü
+## 7) Kitap Ekleme Modal UX (MVP)
 
-```
-[Kütüphaneden Seç / ISBN ile Ekle]
-       │
-       ▼
-  startReadingForIsbn() → log_read: [KT_EVENT]START
-       │
-       ▼
-  logReading() → log_read: pages_read (sayfa farkı)
-       │  (tekrarlı)
-       ▼
-  ┌────────────────┐
-  │  Kitabı Bitir  │ → submitFinishDateModal() → log_read: [KT_EVENT]FINISH
-  └────────────────┘
-  ┌────────────────┐
-  │  Kitabı Bırak  │ → removeFromActiveList() → log_read: [KT_EVENT]DROP
-  └────────────────┘
-```
+1. Kullanici ISBN'i manuel girer veya `html5-qrcode` ile okutma baslatir.
+2. ISBN aramasinda modal icinde loader gorunur.
+3. `apiCall('fetch_book_by_isbn', { isbn })` cagrilir.
+4. Basarili donuste duzenlenebilir onay karti acilir:
+   - kapak goruntu alani,
+   - kitap adi/yazar/sayfa sayisi alanlari,
+   - kategori secimi,
+   - kapak URL duzenleme.
+5. Basarisiz donuste manuel kitap giris formu acilir.
+6. Kayit onayinda `apiCall('add_book_edition', { ... })` cagrilir.
+7. Basarida modal kapanir, toast gosterilir, kutuphane ve ilgili gorunumler yenilenir.
 
 ---
 
-## 8) Kitap Ekleme UX Standardı (MVP)
+## 8) Rozet Kaliciligi ve Oyunlastirma
 
-1. Kullanıcı ISBN'i manuel girer veya kamera ile okutur.
-2. Modal içinde spinner gösterilir.
-3. `apiCall('fetch_book_by_isbn', { isbn })` çağrılır.
-4. Başarılıysa **düzenlenebilir** onay kartı açılır:
-   - Kapak (hotlink), kitap adı (input), yazar (input), sayfa sayısı (input), kategori (select).
-5. Görsel yüklenemezse lucide `book` placeholder gösterilir.
-6. Kitap bulunamazsa **manuel giriş formu** sunulur.
-7. Kullanıcı onaylarsa:
-   - `apiCall('add_book_edition', { isbn, title, author, page_count, thumbnail_url, category })`
-   - Başarıda modal kapanır, toast gösterilir, kütüphane yenilenir.
-8. API hata dönerse okunabilir toast mesajı verilir.
+- Frontend `syncBadgeAchievements` ile backend senkronunu tetikler.
+- Backend `sync_user_badges` aksiyonu:
+  - metrikleri `k_t_read_logs` uzerinden hesaplar,
+  - uygun rozetleri belirler,
+  - yeni kazanimi `k_t_user_badges` tablosuna yazar,
+  - `newly_earned` bilgisiyle geri doner.
+
+Sonuc: rozetler oturumlar arasinda kalicidir.
 
 ---
 
-## 9) Mobil Navigasyon Kararı
+## 9) Undo Davranisi (Guncel Gercek)
 
-- Mobilde sol sidebar kullanılmaz.
-- Mobilde sadece alt menü (`mobile-bottom-nav`) aktif kalır.
-- Bu karar hem JS sınıf yönetimi hem CSS zorlaması ile uygulanır.
-- Öğrenci alt menü: Ana Sayfa, Kitaplarım, Keşfet, Rozetler, Sıralama.
-- Yönetici alt menü: Panel, Raporlar, Öğrenciler, Ayarlar.
+- Backendde `undo_read_log` aksiyonu tanimlidir (SQL Builder icinde delete islemi vardir).
+- Frontend `undoLastReadAction` fonksiyonu bu aksiyonu cagirir.
+- Cagri cevabi su an zorunlu dogrulanmaz; hata olsa bile yerel state geri alinir (MVP simule/fallback davranisi).
 
----
-
-## 10) Güvenli Müdahale Noktaları
-
-1. **Yeni backend aksiyonu** → `api_akisi.json > Smart SQL Builder` jsCode'una else-if ekle.
-2. **Yeni öğrenci ekranı** → `app.js > navigate()` switch'ine case ekle + render fonksiyonu yaz.
-3. **Toast/bildirim** → `showToast()` merkezi noktadır (inline-alert).
-4. **Rozet kuralı** → Frontend: `loadBadgeProgressData()` / Backend: `sync_user_badges` SQL bloğu.
-5. **ISBN fallback akışı** → `api_akisi.json` içindeki Lokal → Google → Kitapyurdu → D&R zincirinin bağlantı bütünlüğü korunmalıdır.
-6. **Yorum sistemi** → Backend: `get_book_comments` / `add_comment`; Frontend: `submitComment()` / `updateBookDetailComments()`.
-7. **Smart SQL Builder güncelleme** → `fix_api.py` scripti kullanılabilir (JSON escape güvenliği).
+Bu nedenle undo akisi "backend + yerel fallback" modelindedir; yalnizca "tam backend garantili" gibi belgelenmemelidir.
 
 ---
 
-## 11) Bilinen Eksikler ve Geliştirme Fırsatları
+## 10) Mobil Navigasyon Standardi
 
-### 🔴 Kritik Eksikler
-
-| # | Eksik | Detay |
-|---|-------|-------|
-| 1 | **Auth güvenliği** | Session/token tabanlı yetkilendirme yok; sadece `localStorage`'da tutulan user objesi ile çalışılıyor. |
-| 2 | **Şifre güvenliği** | `password_hash` alanına düz metin gönderiliyor; backend'de hash işlemi yapılmıyor. |
-| 3 | **Undo backend desteği** | `undo_read_log` aksiyonu frontend'den çağrılıyor ama Smart SQL Builder'da tanımlı değil; çağrı sessizce başarısız oluyor. |
-| 4 | **Raporlar sayfası** | `renderAuthorityReportsView()` sadece dashboard'u tekrar render ediyor; gerçek raporlama (PDF, filtreleme, tarih aralığı) yok. |
-
-### 🟡 Orta Öncelikli Geliştirmeler
-
-| # | Özellik | Detay |
-|---|---------|-------|
-| 5 | **Silme işlemleri** | Kitap silme, okuma kaydı silme, kullanıcı silme backend aksiyonları hiç yok. |
-| 6 | **Profil düzenleme** | Şifre değiştirme, ad güncelleme, profil resmi yok. |
-| 7 | **Yorum moderasyonu** | `k_t_book_comments` tablosunda `status` alanı var ama AI moderasyon henüz aktif değil; tüm yorumlar "approved" olarak ekleniyor. |
-| 8 | **Öğretmen sınıf filtresi** | Yönetici panelinde öğrenciler tüm sistemden çekiliyor; sınıf/okul bazlı filtreleme yok. |
-| 9 | **Offline destek** | PWA / Service Worker desteği yok; çevrimdışı kullanım mümkün değil. |
-
-### 🟢 Geliştirme Fırsatları
-
-| # | Özellik | Detay |
-|---|---------|-------|
-| 10 | **Okuma hedefleri** | Günlük/haftalık sayfa hedefi, hedef takibi ve hatırlatmalar |
-| 11 | **Bildirim sistemi** | Push notification veya in-app bildirim (header'daki zil ikonu dekoratif) |
-| 12 | **Sosyal özellikler** | Arkadaş ekleme, kitap önerisi paylaşma, sınıf içi okuma yarışması |
-| 13 | **Gelişmiş istatistikler** | Öğrenci için haftanın günlerine göre okuma dağılımı, kategori bazlı analiz |
-| 14 | **PDF/Excel rapor** | Yönetici için dışa aktarma; sınıf bazlı karşılaştırmalı raporlar |
-| 15 | **Dark mode** | Tema altyapısı mevcut ama dark mode aktif değil |
-| 16 | **Çoklu dil desteği** | Şu an sadece Türkçe; i18n altyapısı yok |
-| 17 | **app.js modülerleşme** | 3116 satırlık dosya bakımı zorlaştırıyor; ES module veya en azından mantıksal parçalara bölme düşünülebilir |
+- Mobilde desktop sidebar kapali kalir.
+- Mobilde ana navigasyon sadece `mobile-bottom-nav` ile ilerler.
+- Bu karar hem CSS (zorunlu gizleme) hem JS sinif yonetimi ile korunur.
 
 ---
 
-## 12) Veritabanı Şeması Özeti
+## 11) Bilinen Riskler
 
-8 tablo (detaylar `DATABASE_SCHEMA.md` dosyasında):
-
-| Tablo | PK | Ana İlişkiler |
-|-------|-----|---------------|
-| `k_t_users` | `id` (uuid) | `group_id → k_t_groups(id)` |
-| `k_t_groups` | `id` (uuid) | `parent_id → k_t_groups(id)` (self-ref hiyerarşi) |
-| `k_t_read_logs` | `id` (uuid) | `user_id → k_t_users(id)`, `book_isbn → k_t_book_editions(isbn)` |
-| `k_t_books` | `id` (uuid) | — |
-| `k_t_book_editions` | `isbn` (varchar) | `book_id → k_t_books(id)` |
-| `k_t_badges` | `id` (uuid) | — |
-| `k_t_user_badges` | `user_id + badge_id` | `user_id → k_t_users(id)`, `badge_id → k_t_badges(id)` |
-| `k_t_book_comments` | `id` | `user_id → k_t_users(id)`, `book_isbn → k_t_book_editions(isbn)` |
-
-> **Not:** `k_t_book_comments` tablosu `DATABASE_SCHEMA.md`'de henüz belgelenmemiş. Sütunları: `id`, `book_isbn`, `user_id`, `comment_text`, `status`, `created_at`.
+1. Auth akisinda token/session sertlestirmesi yok.
+2. Sifre guvenligi sertlestirmesi gerekli (`password_hash` tarafi).
+3. `renderAuthorityReportsView` halen gercek raporlama degil (stub davranis).
+4. `app.js` tek dosya buyuklugu bakim maliyetini artiriyor.
+5. Kitapyurdu/D&R HTML degisimleri fallback parserlarini kirabilir.
 
 ---
 
-## 13) Operasyon Notu
+## 12) Sonraki Oncelikler
 
-Bu dosya düzenli aralıklarla checkpoint olarak güncellenir.
-- Her önemli adım sonrası: ne değişti, hangi dosyada değişti, hangi davranış artık standart oldu net olarak işlenir.
-- Bu disiplin proje yönünü korur ve ekipler arası bağlam kaybını azaltır.
+1. Yetkili raporlama ekranini filtre/dişa aktarma ile tamamlamak.
+2. Auth + sifre guvenligini sertlestirmek.
+3. `app.js` icin modulerlesme plani cikarmak.
+4. ISBN fallback kaynaklarina regresyon kontrol listesi yazmak.
