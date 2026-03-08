@@ -1026,8 +1026,10 @@ async function renderStudentDashboard(container) {
                                 <div class="bg-child-secondary h-3 rounded-full transition-all duration-1000" style="width: ${hasActiveBook ? (Number(activeBook.progress_percent) || 0) : 0}%"></div>
                             </div>
                             
-                            <button onclick="${hasActiveBook ? `openReadingLogModal('${activeBook.edition_id}')` : "navigate('library')"}" class="w-full sm:w-auto px-6 py-3 bg-child-primary text-white font-bold rounded-xl shadow-md hover:bg-amber-600 transition-colors flex items-center justify-center group">
-                                <i data-lucide="plus-circle" class="w-5 h-5 mr-2 group-hover:rotate-90 transition-transform"></i> Okuma Ekle
+                            <button onclick="${hasActiveBook ? `openReadingLogModal('${activeBook.edition_id}')` : "navigate('library')"}" class="w-full sm:w-auto px-6 py-3 ${hasActiveBook ? 'bg-child-primary hover:bg-amber-600' : 'bg-indigo-600 hover:bg-indigo-700'} text-white font-bold rounded-xl shadow-md transition-colors flex items-center justify-center group">
+                                ${hasActiveBook
+            ? '<i data-lucide="plus-circle" class="w-5 h-5 mr-2 group-hover:rotate-90 transition-transform"></i> Okuma Ekle'
+            : '<i data-lucide="library" class="w-5 h-5 mr-2 group-hover:-translate-y-1 transition-transform"></i> Kütüphaneye Git'}
                             </button>
                         </div>
                     </div>
