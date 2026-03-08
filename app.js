@@ -1380,7 +1380,7 @@ async function startReadingFromLibrary(isbn, title, author, pageCount) {
             resource: 'k_t_read_logs',
             data: {
                 book_isbn: isbn,
-                pages_read: 0,
+                pages_read: 1,
                 note: '[KT_EVENT]START',
                 read_date: getTodayISODate()
             }
