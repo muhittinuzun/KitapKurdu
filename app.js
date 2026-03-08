@@ -1825,7 +1825,7 @@ async function renderLibraryView(container) {
             <div class="max-w-2xl mx-auto flex gap-2">
                 <div class="relative flex-1">
                     <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400"></i>
-                    <input type="text" placeholder="Kitap veya yazar ara..." class="w-full pl-10 pr-4 py-3 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-child-primary focus:border-child-primary shadow-sm outline-none transition-all">
+                    <input id="library-search-input" oninput="handleLibrarySearch(this.value)" type="text" placeholder="Kitap, yazar veya ISBN ara..." class="w-full pl-10 pr-4 py-3 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-child-primary focus:border-child-primary shadow-sm outline-none transition-all">
                 </div>
                 <button onclick="openAddBookModal()" class="bg-child-primary text-white p-3 rounded-xl shadow-sm hover:bg-amber-600 transition-colors flex items-center justify-center shrink-0">
                     <i data-lucide="plus" class="w-6 h-6"></i>
@@ -2474,6 +2474,8 @@ async function fetchLibraryBooks() {
             sectionsContainer.innerHTML += renderBookRow(`${cat} Kitapları`, categories[cat]);
         });
 
+        AppState.data.libraryContentHtml = sectionsContainer.innerHTML;
+
         lucide.createIcons();
     } catch (err) {
         console.error('Failed to load library:', err);
@@ -2494,6 +2496,35 @@ function renderBookRow(title, books) {
             </div>
         </div>
     `;
+}
+
+function handleLibrarySearch(query) {
+    const container = document.getElementById('library-content-sections');
+    if (!container) return;
+
+    if (!query || query.trim().length === 0) {
+        container.innerHTML = AppState.data.libraryContentHtml || '';
+        lucide.createIcons();
+        return;
+    }
+
+    const normalizeStr = (str) => String(str || '').toLocaleLowerCase('tr-TR').trim();
+    const searchStr = normalizeStr(query);
+    const allBooks = Array.isArray(AppState.data.libraryBooks) ? AppState.data.libraryBooks : [];
+
+    const results = allBooks.filter(b => {
+        return normalizeStr(b.title).includes(searchStr) ||
+            normalizeStr(b.author).includes(searchStr) ||
+            normalizeStr(b.isbn).includes(searchStr);
+    });
+
+    if (results.length === 0) {
+        container.innerHTML = '<div class="text-center text-gray-500 py-12">Aradığınız kriterlere uygun kitap bulunamadı.</div>';
+        return;
+    }
+
+    container.innerHTML = renderBookRow(`Arama Sonuçları (${results.length})`, results);
+    lucide.createIcons();
 }
 
 function renderLibraryBookCard(b) {
