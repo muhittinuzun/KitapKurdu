@@ -174,6 +174,130 @@ function normalizeRole(role) {
     return normalized;
 }
 
+// --- Custom UI Helpers ---
+
+function showConfirmModal(title, text, confirmText = 'Evet', cancelText = 'Hayır') {
+    return new Promise((resolve) => {
+        // Remove existing if any
+        const existing = document.getElementById('custom-confirm-modal');
+        if (existing) existing.remove();
+
+        const modalHtml = `
+            <div id="custom-confirm-modal" class="fixed inset-0 z-[100] bg-gray-900/60 backdrop-blur-sm flex items-center justify-center p-4 opacity-0 transition-opacity duration-300">
+                <div class="bg-white rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden scale-90 transition-transform duration-300 transform">
+                    <div class="p-6 text-center">
+                        <div class="w-20 h-20 mx-auto bg-amber-100 rounded-full flex items-center justify-center mb-4 text-4xl">
+                            🎉
+                        </div>
+                        <h3 class="text-2xl font-display font-bold text-gray-900 mb-2">${escapeHtml(title)}</h3>
+                        <p class="text-gray-600 mb-6 font-medium">${escapeHtml(text)}</p>
+                        
+                        <div class="flex gap-3">
+                            <button id="confirm-cancel-btn" class="flex-1 py-3 px-4 rounded-2xl bg-gray-100 text-gray-700 font-bold hover:bg-gray-200 transition-colors active:scale-95">
+                                ${escapeHtml(cancelText)}
+                            </button>
+                            <button id="confirm-ok-btn" class="flex-1 py-3 px-4 rounded-2xl bg-child-primary text-white font-bold hover:bg-amber-600 shadow-md shadow-amber-200 transition-colors active:scale-95">
+                                ${escapeHtml(confirmText)}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        const modal = document.getElementById('custom-confirm-modal');
+        const modalInner = modal.querySelector('div.bg-white');
+
+        // Trigger animation
+        requestAnimationFrame(() => {
+            modal.classList.remove('opacity-0');
+            modalInner.classList.remove('scale-90');
+        });
+
+        const close = (result) => {
+            modal.classList.add('opacity-0');
+            modalInner.classList.add('scale-90');
+            setTimeout(() => {
+                modal.remove();
+                resolve(result);
+            }, 300);
+        };
+
+        document.getElementById('confirm-ok-btn').addEventListener('click', () => close(true));
+        document.getElementById('confirm-cancel-btn').addEventListener('click', () => close(false));
+    });
+}
+
+function showBadgeCelebrationModal(badgeNames) {
+    // Basic multiple badge support: display first, indicate if more
+    const primaryBadge = badgeNames[0];
+    const moreText = badgeNames.length > 1 ? ` ve ${badgeNames.length - 1} rozet daha` : '';
+
+    // Remove existing if any
+    const existing = document.getElementById('badge-celebration-modal');
+    if (existing) existing.remove();
+
+    const modalHtml = `
+        <div id="badge-celebration-modal" class="fixed inset-0 z-[100] bg-gray-900/80 backdrop-blur-md flex items-center justify-center p-4">
+            <div class="bg-gradient-to-b from-white to-amber-50 rounded-3xl shadow-2xl w-full max-w-md overflow-hidden animate-slide-up relative border-4 border-amber-200">
+                <button id="close-celebration-btn" class="absolute top-4 right-4 text-gray-400 hover:text-gray-700 z-10 p-2 bg-white/50 rounded-full backdrop-blur-sm">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </button>
+                
+                <div class="p-8 text-center pt-12">
+                    <div class="relative w-32 h-32 mx-auto mb-6">
+                        <div class="absolute inset-0 bg-amber-400 rounded-full animate-ping opacity-20"></div>
+                        <div class="relative w-full h-full bg-gradient-to-tr from-amber-400 to-yellow-300 rounded-full flex items-center justify-center shadow-inner shadow-amber-600 border-4 border-white">
+                            <span class="text-6xl drop-shadow-md">🏆</span>
+                        </div>
+                    </div>
+                    
+                    <h2 class="text-3xl font-display font-black text-transparent bg-clip-text bg-gradient-to-r from-amber-500 to-orange-600 mb-2">Tebrikler!</h2>
+                    <p class="text-lg text-gray-700 font-bold mb-1">Yeni bir rozet kazandın:</p>
+                    <div class="inline-block px-4 py-2 bg-amber-100 border border-amber-300 rounded-xl mb-6 shadow-sm">
+                        <p class="text-xl font-display font-bold text-amber-800">${escapeHtml(primaryBadge)}${moreText}</p>
+                    </div>
+                    
+                    <button id="celebration-awesome-btn" class="w-full py-4 rounded-2xl bg-gradient-to-r from-child-primary to-amber-600 text-white font-black text-lg shadow-xl shadow-amber-200 hover:scale-[1.02] transition-transform active:scale-95">
+                        Harika! Devam Et
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+
+    // Fire big confetti
+    const duration = 3 * 1000;
+    const animationEnd = Date.now() + duration;
+    const defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 101 };
+
+    function randomInRange(min, max) {
+        return Math.random() * (max - min) + min;
+    }
+
+    const interval = setInterval(function () {
+        const timeLeft = animationEnd - Date.now();
+        if (timeLeft <= 0) return clearInterval(interval);
+        const particleCount = 50 * (timeLeft / duration);
+        confetti(Object.assign({}, defaults, { particleCount, origin: { x: randomInRange(0.1, 0.3), y: Math.random() - 0.2 } }));
+        confetti(Object.assign({}, defaults, { particleCount, origin: { x: randomInRange(0.7, 0.9), y: Math.random() - 0.2 } }));
+    }, 250);
+
+    const closeHandler = () => {
+        const modal = document.getElementById('badge-celebration-modal');
+        if (modal) {
+            modal.classList.add('opacity-0');
+            setTimeout(() => modal.remove(), 300);
+        }
+    };
+
+    document.getElementById('celebration-awesome-btn').addEventListener('click', closeHandler);
+    document.getElementById('close-celebration-btn').addEventListener('click', closeHandler);
+}
+
 // --- Routing & Views ---
 
 async function checkAuth() {
@@ -799,8 +923,18 @@ async function loadStudentActiveBook() {
     if (!AppState.user || !AppState.user.id) return;
     try {
         const books = await loadMyBooksData();
-        // En son okunan ve bitmemiş olanı aktif seç, yoksa en son okunanı seç
-        const active = books.find(b => !b.finished && !b.dropped) || (books.length > 0 ? books[0] : null);
+        const preferredIsbn = AppState.data.preferredActiveIsbn;
+
+        let active = null;
+        if (preferredIsbn) {
+            active = books.find(b => b.edition_id === preferredIsbn && !b.finished && !b.dropped);
+        }
+
+        if (!active) {
+            // En son okunan ve bitmemiş olanı aktif seç, yoksa listendeki ilk kitabı ver
+            active = books.find(b => !b.finished && !b.dropped) || (books.length > 0 ? books[0] : null);
+        }
+
         AppState.data.activeBook = active;
     } catch (err) {
         console.error('Active book load error:', err);
@@ -1227,18 +1361,8 @@ function calculateReadingStreak(logs) {
 }
 
 function startReadingForIsbn(isbn) {
-    const book = AppState.data.bookProgressMap[isbn];
-    if (!book) {
-        showToast('Kitap bilgisi bulunamadı.', 'error');
-        return;
-    }
-    AppState.data.activeBook = {
-        edition_id: book.edition_id,
-        title: book.title,
-        author: book.author,
-        page_count: book.page_count,
-        current_page: book.current_page
-    };
+    if (!isbn) return;
+    AppState.data.preferredActiveIsbn = isbn;
     navigate('student_dashboard');
 }
 
@@ -1263,14 +1387,8 @@ async function startReadingFromLibrary(isbn, title, author, pageCount) {
         console.error('Start reading log error:', err);
     }
 
-    AppState.data.activeBook = {
-        edition_id: isbn,
-        title: title || 'İsimsiz Kitap',
-        author: author || 'Bilinmeyen Yazar',
-        page_count: Number(pageCount) || 1,
-        current_page: 0
-    };
-    showToast('Kitap aktif okumana eklendi. Şimdi ilerleme girebilirsin.', 'success');
+    AppState.data.preferredActiveIsbn = isbn;
+    showToast('Kitap okumaya eklendi! Şimdi ilerleme girebilirsin.', 'success');
     navigate('student_dashboard');
 }
 
@@ -1556,7 +1674,7 @@ async function syncBadgeAchievements(notifyNew = false) {
         const newlyEarnedBadges = rows.filter((r) => r.newly_earned).map((r) => r.name);
 
         if (notifyNew && newlyEarnedBadges.length > 0) {
-            showToast(`Yeni rozet kazandın: ${newlyEarnedBadges.join(', ')}`, 'success');
+            showBadgeCelebrationModal(newlyEarnedBadges);
         }
     } catch (err) {
         console.error('Badge sync error:', err);
@@ -2781,6 +2899,7 @@ async function logReading(newPage, noteText, isCorrection = false) {
         return;
     }
     const currentPage = Number(AppState.data.activeBook.current_page) || 0;
+    const pageCount = Number(AppState.data.activeBook.page_count) || 9999;
     const deltaStr = newPage - currentPage;
 
     if (isCorrection) {
@@ -2789,7 +2908,7 @@ async function logReading(newPage, noteText, isCorrection = false) {
             showToast('Bu zaten mevcut sayfan. Farklı bir sayfa gir.', 'error');
             return;
         }
-        if (newPage < 0 || newPage > Number(AppState.data.activeBook.page_count || 9999)) {
+        if (newPage < 0 || newPage > pageCount) {
             showToast('Geçersiz sayfa numarası.', 'error');
             return;
         }
@@ -2798,6 +2917,23 @@ async function logReading(newPage, noteText, isCorrection = false) {
         if (deltaStr <= 0) {
             showToast('Yeni sayfa mevcut sayfadan büyük olmalıdır.', 'error');
             return;
+        }
+    }
+
+    let finalNote = isCorrection ? '[KT_CORRECTION]' : (noteText || null);
+    let isFinished = false;
+
+    // Eğer son sayfaya ulaşıldıysa ve bu bir düzeltme değilse, hedefe vardığını soralım
+    if (!isCorrection && newPage >= pageCount) {
+        const confirmed = await showConfirmModal(
+            'Kitabı Bitirdin mi?',
+            'Harika! Kitabın son sayfasına ulaştın. Bu kitabı tamamen bitirdin mi?',
+            'Evet, bitirdim! 🎉',
+            'Hayır, henüz değil'
+        );
+        if (confirmed) {
+            isFinished = true;
+            finalNote = finalNote ? `[KT_EVENT]FINISH ${finalNote}` : '[KT_EVENT]FINISH';
         }
     }
 
@@ -2834,20 +2970,33 @@ async function logReading(newPage, noteText, isCorrection = false) {
         if (isCorrection) {
             showToast(`Sayfa ${newPage} olarak düzeltildi.`, 'success');
         } else {
-            // Confetti kutlaması
-            confetti({
-                particleCount: 150,
-                spread: 70,
-                origin: { y: 0.6 },
-                colors: ['#f59e0b', '#6366f1', '#10b981', '#ef4444']
-            });
+            if (isFinished) {
+                // Büyük Kitap Bitirme Konfetisi
+                confetti({
+                    particleCount: 200,
+                    spread: 100,
+                    origin: { y: 0.5 },
+                    colors: ['#f59e0b', '#10b981', '#3b82f6', '#ec4899', '#8b5cf6']
+                });
+                showToast(`Tebrikler! ${AppState.data.activeBook.title} kitabını bitirdin. 📚🎉`, 'success');
+            } else {
+                // Normal Okuma Konfetisi
+                confetti({
+                    particleCount: 150,
+                    spread: 70,
+                    origin: { y: 0.6 },
+                    colors: ['#f59e0b', '#6366f1', '#10b981', '#ef4444']
+                });
 
-            showToast(`Harika! ${deltaStr} sayfa daha okudun. 🎉`, 'success', {
-                actionLabel: 'Geri Al',
-                onAction: async () => {
-                    await undoLastReadAction();
-                }
-            });
+                showToast(`Harika! ${deltaStr} sayfa daha okudun. 🎉`, 'success', {
+                    actionLabel: 'Geri Al',
+                    onAction: async () => {
+                        await undoLastReadAction();
+                    }
+                });
+            }
+
+            // Yeni rozet gelip gelmediğini kontrol et
             await syncBadgeAchievements(true);
         }
 

@@ -71,9 +71,9 @@ else if (action === 'get_library_books') {
   params = [Number(data.limit) || 50, Number(data.offset) || 0];
 }
 else if (action === 'get_user_books') {
-  // Anti Graviti Optimizasyonu (Finished ve Dropped Bayrakları)
+  // Anti Graviti Optimizasyonu (Finished ve Dropped Bayrakları, 0 sayfalık başlangıç logları dahil)
   if (!userId) throw new Error('get_user_books için user_id zorunludur');
-  query = `SELECT e.isbn, b.title, b.author, e.page_count, e.thumbnail_url, b.category, COALESCE(SUM(r.pages_read), 0)::int as pages_read, MAX(r.read_date) as last_read_date, bool_or(r.note LIKE '[KT_EVENT]FINISH%') as finished, bool_or(r.note LIKE '[KT_EVENT]DROP%') as dropped FROM k_t_book_editions e JOIN k_t_books b ON e.book_id = b.id LEFT JOIN k_t_read_logs r ON e.isbn = r.book_isbn AND r.user_id = $1 GROUP BY e.isbn, b.title, b.author, e.page_count, e.thumbnail_url, b.category HAVING COALESCE(SUM(r.pages_read), 0) > 0 ORDER BY last_read_date DESC NULLS LAST`;
+  query = \`SELECT e.isbn, b.title, b.author, e.page_count, e.thumbnail_url, b.category, COALESCE(SUM(r.pages_read), 0)::int as pages_read, MAX(r.read_date) as last_read_date, bool_or(r.note LIKE '[KT_EVENT]FINISH%') as finished, bool_or(r.note LIKE '[KT_EVENT]DROP%') as dropped FROM k_t_book_editions e JOIN k_t_books b ON e.book_id = b.id JOIN k_t_read_logs r ON e.isbn = r.book_isbn AND r.user_id = $1 GROUP BY e.isbn, b.title, b.author, e.page_count, e.thumbnail_url, b.category ORDER BY last_read_date DESC NULLS LAST\`;
   params = [userId];
 }
 else if (action === 'log_read') {
