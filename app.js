@@ -935,39 +935,49 @@ async function renderStudentDashboard(container) {
 
         <!-- Read Log Modal -->
         <div id="read-log-modal" class="fixed inset-0 z-50 bg-gray-900/50 backdrop-blur-sm hidden flex items-center justify-center p-4">
-            <div class="bg-white rounded-3xl shadow-xl w-full max-w-md overflow-hidden animate-slide-up">
-                <div class="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-indigo-50/50">
-                    <h3 class="font-bold text-lg text-indigo-900 flex items-center">
-                        <i data-lucide="book-open" class="w-5 h-5 mr-2 text-indigo-500"></i> Şu An Kaçıncı Sayfadasın?
-                    </h3>
-                    <button onclick="closeReadingLogModal()" class="text-gray-400 hover:text-gray-600 p-1">
-                        <i data-lucide="x" class="w-5 h-5"></i>
-                    </button>
+            <div class="bg-white rounded-3xl shadow-xl w-full max-w-md overflow-hidden animate-slide-up relative">
+                <!-- Büyük Kapatma Butonu -->
+                <button onclick="closeReadingLogModal()" class="absolute top-3 right-3 z-10 w-10 h-10 bg-red-100 hover:bg-red-200 text-red-500 hover:text-red-700 rounded-full flex items-center justify-center transition-all shadow-sm active:scale-90" aria-label="Kapat">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </button>
+
+                <div class="px-6 pt-6 pb-4 bg-gradient-to-br from-indigo-50 to-amber-50 text-center">
+                    <div class="text-4xl mb-2">📖</div>
+                    <h3 class="font-display font-bold text-xl text-gray-900">Şu An Kaçıncı Sayfadasın?</h3>
                 </div>
+
                 <div class="p-6">
-                    <div class="mb-5 bg-amber-50 p-4 rounded-xl border border-amber-100 flex justify-between items-center">
-                        <span class="text-amber-800 text-sm font-medium">En son kaldığın sayfa:</span>
-                        <span class="font-bold font-display text-xl text-amber-600">${hasActiveBook ? AppState.data.activeBook.current_page : 0}</span>
+                    <!-- Mevcut Sayfa Göstergesi -->
+                    <div class="mb-5 bg-amber-50 p-4 rounded-2xl border border-amber-200 flex justify-between items-center">
+                        <span class="text-amber-800 text-sm font-bold flex items-center">📌 En son kaldığın sayfa</span>
+                        <span class="font-bold font-display text-2xl text-amber-600">${hasActiveBook ? AppState.data.activeBook.current_page : 0}</span>
                     </div>
-                
-                    <form id="read-log-form" class="space-y-4">
-                        <div>
-                            <label class="block text-sm font-bold text-gray-800 mb-2">Şu an kaçıncı sayfadasın?</label>
-                            <input type="number" id="log-new-page" min="${hasActiveBook ? AppState.data.activeBook.current_page + 1 : 1}" max="${hasActiveBook ? AppState.data.activeBook.page_count : 1}" ${hasActiveBook ? 'required' : 'disabled'} class="w-full px-4 py-3 text-xl font-display text-center border-2 border-indigo-100 rounded-xl focus:ring-4 focus:ring-indigo-100 focus:border-indigo-500 outline-none transition-all ${hasActiveBook ? '' : 'opacity-50'}" placeholder="${hasActiveBook ? 'Örn: 55' : 'Önce aktif kitap seç'}">
+
+                    <!-- Kitap ilerleme barı -->
+                    <div class="mb-5 flex items-center gap-3">
+                        <div class="flex-1 bg-gray-100 rounded-full h-3 overflow-hidden">
+                            <div class="bg-gradient-to-r from-indigo-500 to-child-primary h-3 rounded-full transition-all duration-700" style="width: ${progressPercent}%"></div>
                         </div>
-                        
-                        <div class="pt-2">
-                            <label class="block text-sm font-bold text-gray-800 mb-2 flex justify-between items-center">
-                                Okuma Notu (İsteğe bağlı)
-                                <button type="button" onclick="startSpeechToText('log-note')" class="text-indigo-600 hover:text-indigo-800 flex items-center text-xs bg-indigo-50 px-2 py-1 rounded-full transition-colors" title="Sesle yazdır">
-                                    <i data-lucide="mic" class="w-3 h-3 mr-1"></i> Sesli Yazdır
-                                </button>
-                            </label>
-                            <textarea id="log-note" rows="3" class="w-full px-3 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-200 outline-none text-sm transition-all shadow-inner" placeholder="Bugün okuduğun kısım hakkında neler hissettin?"></textarea>
+                        <span class="text-xs font-bold text-gray-500 whitespace-nowrap">${safeCurrentPage} / ${safePageCount}</span>
+                    </div>
+
+                    <form id="read-log-form" class="space-y-4">
+                        <input type="hidden" id="log-correction-mode" value="0">
+
+                        <div>
+                            <label id="log-page-label" class="block text-sm font-bold text-gray-800 mb-2">✏️ Şu an kaçıncı sayfadasın?</label>
+                            <input type="number" id="log-new-page" min="${hasActiveBook ? (AppState.data.activeBook.current_page + 1) : 1}" max="${hasActiveBook ? AppState.data.activeBook.page_count : 1}" ${hasActiveBook ? 'required' : 'disabled'} class="w-full px-4 py-4 text-2xl font-display text-center border-2 border-indigo-200 rounded-2xl focus:ring-4 focus:ring-indigo-100 focus:border-indigo-500 outline-none transition-all ${hasActiveBook ? '' : 'opacity-50'}" placeholder="${hasActiveBook ? 'Örn: 55' : 'Önce aktif kitap seç'}">
                         </div>
 
-                        <button type="submit" ${hasActiveBook ? '' : 'disabled'} class="w-full mt-2 py-3.5 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 transition-colors shadow-md flex justify-center items-center text-lg ${hasActiveBook ? '' : 'opacity-50 cursor-not-allowed'}">
-                            <i data-lucide="check" class="w-5 h-5 mr-2"></i> İlerlemeyi Kaydet
+                        <!-- Düzeltme Modu Linki -->
+                        <div class="text-center">
+                            <button type="button" id="correction-toggle-btn" onclick="toggleCorrectionMode()" class="text-xs text-gray-400 hover:text-red-500 transition-colors underline underline-offset-2">
+                                🔧 Önceki sayfayı yanlış mı girdin? Düzelt
+                            </button>
+                        </div>
+
+                        <button type="submit" ${hasActiveBook ? '' : 'disabled'} class="w-full mt-1 py-4 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white font-bold rounded-2xl hover:from-emerald-600 hover:to-emerald-700 transition-all shadow-lg flex justify-center items-center text-lg active:scale-95 ${hasActiveBook ? '' : 'opacity-50 cursor-not-allowed'}">
+                            ✅ İlerlemeyi Kaydet
                         </button>
                     </form>
                 </div>
@@ -981,8 +991,8 @@ async function renderStudentDashboard(container) {
         logForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             const newPage = parseInt(document.getElementById('log-new-page').value, 10);
-            const noteText = document.getElementById('log-note').value;
-            await logReading(newPage, noteText);
+            const isCorrection = document.getElementById('log-correction-mode')?.value === '1';
+            await logReading(newPage, '', isCorrection);
         });
     }
 }
@@ -1002,6 +1012,46 @@ async function openReadingLogModal(isbn) {
 function closeReadingLogModal() {
     const modal = document.getElementById('read-log-modal');
     if (modal) modal.classList.add('hidden');
+}
+
+function toggleCorrectionMode() {
+    const hiddenInput = document.getElementById('log-correction-mode');
+    const pageInput = document.getElementById('log-new-page');
+    const label = document.getElementById('log-page-label');
+    const toggleBtn = document.getElementById('correction-toggle-btn');
+    if (!hiddenInput || !pageInput) return;
+
+    const isNowCorrection = hiddenInput.value === '0';
+    hiddenInput.value = isNowCorrection ? '1' : '0';
+
+    if (isNowCorrection) {
+        // Düzeltme moduna geç
+        pageInput.min = '0';
+        pageInput.value = '';
+        pageInput.placeholder = 'Doğru sayfa numarasını gir';
+        pageInput.classList.remove('border-indigo-200');
+        pageInput.classList.add('border-red-300', 'ring-red-100');
+        if (label) label.innerHTML = '🔧 Doğru sayfa numarasını gir:';
+        if (toggleBtn) {
+            toggleBtn.innerHTML = '⬅️ Normal okuma kaydına dön';
+            toggleBtn.classList.add('text-red-500');
+            toggleBtn.classList.remove('text-gray-400');
+        }
+    } else {
+        // Normal moda dön
+        const currentPage = Number(AppState.data?.activeBook?.current_page) || 0;
+        pageInput.min = String(currentPage + 1);
+        pageInput.value = '';
+        pageInput.placeholder = 'Örn: 55';
+        pageInput.classList.add('border-indigo-200');
+        pageInput.classList.remove('border-red-300', 'ring-red-100');
+        if (label) label.innerHTML = '✏️ Şu an kaçıncı sayfadasın?';
+        if (toggleBtn) {
+            toggleBtn.innerHTML = '🔧 Önceki sayfayı yanlış mı girdin? Düzelt';
+            toggleBtn.classList.remove('text-red-500');
+            toggleBtn.classList.add('text-gray-400');
+        }
+    }
 }
 
 function startSpeechToText(targetId) {
@@ -2725,28 +2775,43 @@ function showToast(message, type = 'info', options = {}) {
     }
 }
 
-async function logReading(newPage, noteText) {
+async function logReading(newPage, noteText, isCorrection = false) {
     if (!AppState.data.activeBook || !AppState.data.activeBook.edition_id) {
         showToast('Önce bir kitabı aktif okumana eklemelisin.', 'error');
         return;
     }
-    const deltaStr = newPage - AppState.data.activeBook.current_page;
-    if (deltaStr <= 0) {
-        showToast('Yeni sayfa mevcut sayfadan büyük olmalıdır.', 'error');
-        return;
+    const currentPage = Number(AppState.data.activeBook.current_page) || 0;
+    const deltaStr = newPage - currentPage;
+
+    if (isCorrection) {
+        // Düzeltme modu: farklı bir sayfa olmalı
+        if (newPage === currentPage) {
+            showToast('Bu zaten mevcut sayfan. Farklı bir sayfa gir.', 'error');
+            return;
+        }
+        if (newPage < 0 || newPage > Number(AppState.data.activeBook.page_count || 9999)) {
+            showToast('Geçersiz sayfa numarası.', 'error');
+            return;
+        }
+    } else {
+        // Normal mod: ileri gitmiş olmalı
+        if (deltaStr <= 0) {
+            showToast('Yeni sayfa mevcut sayfadan büyük olmalıdır.', 'error');
+            return;
+        }
     }
 
-    showToast('Okuma kaydediliyor...', 'info');
+    showToast(isCorrection ? 'Sayfa düzeltiliyor...' : 'Okuma kaydediliyor...', 'info');
 
     try {
-        const prevPage = Number(AppState.data.activeBook.current_page) || 0;
+        const prevPage = currentPage;
         const logRes = await apiCall({
             action: 'log_read',
             resource: 'k_t_read_logs',
             data: {
                 book_isbn: AppState.data.activeBook.edition_id,
                 pages_read: deltaStr,
-                note: noteText,
+                note: isCorrection ? '[KT_CORRECTION]' : (noteText || null),
                 read_date: new Date().toISOString().split('T')[0]
             }
         });
@@ -2766,21 +2831,25 @@ async function logReading(newPage, noteText) {
         closeReadingLogModal();
         renderStudentDashboard(document.getElementById('view-container'));
 
-        // Demonstration of canvas-confetti
-        confetti({
-            particleCount: 150,
-            spread: 70,
-            origin: { y: 0.6 },
-            colors: ['#f59e0b', '#6366f1', '#10b981', '#ef4444']
-        });
+        if (isCorrection) {
+            showToast(`Sayfa ${newPage} olarak düzeltildi.`, 'success');
+        } else {
+            // Confetti kutlaması
+            confetti({
+                particleCount: 150,
+                spread: 70,
+                origin: { y: 0.6 },
+                colors: ['#f59e0b', '#6366f1', '#10b981', '#ef4444']
+            });
 
-        showToast(`Harika! ${deltaStr} sayfa daha okudun.`, 'success', {
-            actionLabel: 'Geri Al',
-            onAction: async () => {
-                await undoLastReadAction();
-            }
-        });
-        await syncBadgeAchievements(true);
+            showToast(`Harika! ${deltaStr} sayfa daha okudun. 🎉`, 'success', {
+                actionLabel: 'Geri Al',
+                onAction: async () => {
+                    await undoLastReadAction();
+                }
+            });
+            await syncBadgeAchievements(true);
+        }
 
     } catch (err) {
         console.error('Log reading error:', err);
