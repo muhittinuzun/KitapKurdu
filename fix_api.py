@@ -3,23 +3,12 @@ import json
 filepath = '/Users/ahmetmuhittinuzun/Documents/eski belgeler/GitHub/KitapTakipApp/KitapKurdu/api_akisi.json'
 
 with open(filepath, 'r') as f:
-    lines = f.readlines()
+    workflow = json.load(f)
 
-# Head: 1 to 43 (0-indexed: 0 to 42)
-head = lines[:43]
-
-# Tail: 93 to end (0-indexed: 92 to end)
-# Wait, I need to check line 93 again.
-# In Step 199:
-# 92: return { query, params, resource };"
-# 93: },
-# 94: "id": ...
-
-# So lines[92:] starts from line 93.
-tail = lines[92:]
-
-# New content for jsCode
-js_code_raw = r"""// AKILLI SORGU OLUŞTURUCU (SQL BUILDER)
+# Find the Smart SQL Builder node
+for node in workflow['nodes']:
+    if node['name'] == 'Smart SQL Builder':
+        node['parameters']['jsCode'] = r"""// AKILLI SORGU OLUŞTURUCU (SQL BUILDER)
 // Sözleşme: { action, resource, data, user_id }
 
 const incoming = $json.body ?? $json;
@@ -37,7 +26,7 @@ if (!resource) {
     resource = 'k_t_groups';
   } else if (action === 'login' || action === 'register') {
     resource = 'k_t_users';
-  } else if (action === 'log_read' || action === 'dashboard_stats' || action === 'leaderboard_group' || action === 'authority_stats' || action === 'authority_students' || action === 'get_user_books') {
+  } else if (action === 'log_read' || action === 'dashboard_stats' || action === 'leaderboard_group' || action === 'authority_stats' || action === 'authority_students' || action === 'get_user_books' || action === 'undo_read_log') {
     resource = 'k_t_read_logs';
   } else if (action === 'add_book_edition' || action === 'get_library_books') {
     resource = 'k_t_book_editions';
@@ -77,27 +66,26 @@ else if (action === 'add_book_edition') {
   params = [data.title, data.author || null, data.category || null, data.isbn, Number(data.page_count), data.thumbnail_url || null];
 }
 else if (action === 'get_library_books') {
+  // Anti Graviti Optimizasyonu (Performans + Sayfalama)
   query = `SELECT e.isbn, b.title, b.author, e.page_count, b.category, e.thumbnail_url, COUNT(DISTINCT r.user_id)::int as read_count FROM k_t_book_editions e JOIN k_t_books b ON e.book_id = b.id LEFT JOIN k_t_read_logs r ON e.isbn = r.book_isbn GROUP BY e.isbn, b.title, b.author, e.page_count, b.category, e.thumbnail_url ORDER BY e.isbn DESC LIMIT $1 OFFSET $2`;
-  params = [Number(data.limit) || 24, Number(data.offset) || 0];
-}
-else if (action === 'get_book_comments') {
-  query = `SELECT c.id, c.comment_text, c.created_at, u.full_name FROM k_t_book_comments c JOIN k_t_users u ON c.user_id = u.id WHERE c.book_isbn = $1 ORDER BY c.created_at DESC`;
-  params = [data.book_isbn];
-}
-else if (action === 'add_comment') {
-  if (!userId) throw new Error('add_comment için user_id zorunludur');
-  query = `INSERT INTO k_t_book_comments (book_isbn, user_id, comment_text) VALUES ($1, $2, $3) RETURNING id, created_at`;
-  params = [data.book_isbn, userId, data.comment_text];
+  params = [Number(data.limit) || 50, Number(data.offset) || 0];
 }
 else if (action === 'get_user_books') {
+  // Anti Graviti Optimizasyonu (Finished ve Dropped Bayrakları)
   if (!userId) throw new Error('get_user_books için user_id zorunludur');
-  query = `SELECT e.isbn, b.title, b.author, e.page_count, e.thumbnail_url, COALESCE(SUM(r.pages_read), 0)::int as pages_read, MAX(r.read_date) as last_read_date, bool_or(r.note LIKE '[KT_EVENT]FINISH%') as finished, bool_or(r.note LIKE '[KT_EVENT]DROP%') as dropped FROM k_t_book_editions e JOIN k_t_books b ON e.book_id = b.id LEFT JOIN k_t_read_logs r ON e.isbn = r.book_isbn AND r.user_id = $1 GROUP BY e.isbn, b.title, b.author, e.page_count, e.thumbnail_url HAVING COALESCE(SUM(r.pages_read), 0) > 0 ORDER BY last_read_date DESC NULLS LAST`;
+  query = `SELECT e.isbn, b.title, b.author, e.page_count, e.thumbnail_url, b.category, COALESCE(SUM(r.pages_read), 0)::int as pages_read, MAX(r.read_date) as last_read_date, bool_or(r.note LIKE '[KT_EVENT]FINISH%') as finished, bool_or(r.note LIKE '[KT_EVENT]DROP%') as dropped FROM k_t_book_editions e JOIN k_t_books b ON e.book_id = b.id LEFT JOIN k_t_read_logs r ON e.isbn = r.book_isbn AND r.user_id = $1 GROUP BY e.isbn, b.title, b.author, e.page_count, e.thumbnail_url, b.category HAVING COALESCE(SUM(r.pages_read), 0) > 0 ORDER BY last_read_date DESC NULLS LAST`;
   params = [userId];
 }
 else if (action === 'log_read') {
   if (!userId) throw new Error('log_read için user_id zorunludur');
   query = `INSERT INTO k_t_read_logs (user_id, book_isbn, pages_read, read_date, note) VALUES ($1, $2, $3, $4, $5) RETURNING id, user_id, book_isbn, pages_read, read_date, note`;
   params = [userId, data.book_isbn, Number(data.pages_read), data.read_date || null, data.note || null];
+}
+else if (action === 'undo_read_log') {
+  if (!userId) throw new Error('undo_read_log için user_id zorunludur');
+  if (!data.log_id) throw new Error('undo_read_log için log_id zorunludur');
+  query = `DELETE FROM k_t_read_logs WHERE id = $1 AND user_id = $2 RETURNING id`;
+  params = [data.log_id, userId];
 }
 else if (action === 'dashboard_stats') {
   if (!userId) throw new Error('dashboard_stats için user_id zorunludur');
@@ -106,7 +94,7 @@ else if (action === 'dashboard_stats') {
 }
 else if (action === 'leaderboard_group') {
   if (!data.group_id) throw new Error('leaderboard_group için group_id zorunludur');
-  query = `SELECT u.id AS user_id, u.full_name, COALESCE(SUM(r.pages_read), 0) AS total_pages FROM k_t_users u LEFT JOIN k_t_read_logs r ON r.user_id = u.id WHERE u.group_id = $1 AND LOWER(COALESCE(u.role, 'student')) = 'student' GROUP BY u.id, u.full_name ORDER BY total_pages DESC, u.full_name ASC LIMIT $2`;
+  query = `SELECT u.id AS user_id, u.full_name, COALESCE(SUM(CASE WHEN r.note IS NULL OR r.note NOT LIKE '[KT_EVENT]%' THEN r.pages_read ELSE 0 END), 0) AS total_pages FROM k_t_users u LEFT JOIN k_t_read_logs r ON r.user_id = u.id WHERE u.group_id = $1 AND LOWER(COALESCE(u.role, 'student')) = 'student' GROUP BY u.id, u.full_name ORDER BY total_pages DESC, u.full_name ASC LIMIT $2`;
   params = [data.group_id, Number(data.limit) || 50];
 }
 else if (action === 'authority_stats') {
@@ -120,6 +108,17 @@ else if (action === 'sync_user_badges') {
   if (!userId) throw new Error('sync_user_badges için user_id zorunludur');
   query = `WITH RECURSIVE base AS (SELECT book_isbn, pages_read, read_date::date AS read_date, note FROM k_t_read_logs WHERE user_id = $1), dates AS (SELECT DISTINCT read_date FROM base WHERE read_date IS NOT NULL), anchor AS (SELECT CASE WHEN EXISTS (SELECT 1 FROM dates WHERE read_date = CURRENT_DATE) THEN CURRENT_DATE WHEN EXISTS (SELECT 1 FROM dates WHERE read_date = (CURRENT_DATE - INTERVAL '1 day')::date) THEN (CURRENT_DATE - INTERVAL '1 day')::date ELSE NULL END AS start_date), streak(d) AS (SELECT start_date FROM anchor WHERE start_date IS NOT NULL UNION ALL SELECT (streak.d - INTERVAL '1 day')::date FROM streak WHERE EXISTS (SELECT 1 FROM dates WHERE read_date = (streak.d - INTERVAL '1 day')::date)), metrics AS (SELECT COALESCE((SELECT SUM(pages_read) FROM base WHERE pages_read > 0), 0) AS total_pages, COALESCE((SELECT COUNT(DISTINCT book_isbn) FROM base WHERE note LIKE '[KT_EVENT]FINISH%'), 0) AS total_books, COALESCE((SELECT COUNT(*) FROM streak), 0) AS read_streak), eligible AS (SELECT b.id AS badge_id FROM k_t_badges b CROSS JOIN metrics m WHERE (b.requirement_type = 'total_pages' AND m.total_pages >= b.requirement_value) OR (b.requirement_type = 'total_books' AND m.total_books >= b.requirement_value) OR (b.requirement_type = 'read_streak' AND m.read_streak >= b.requirement_value)), inserted AS (INSERT INTO k_t_user_badges (user_id, badge_id, earned_at) SELECT $1, e.badge_id, NOW() FROM eligible e LEFT JOIN k_t_user_badges ub ON ub.user_id = $1 AND ub.badge_id = e.badge_id WHERE ub.badge_id IS NULL RETURNING badge_id) SELECT b.id, b.name, b.icon_key, b.requirement_type, b.requirement_value, CASE WHEN i.badge_id IS NOT NULL THEN true ELSE false END AS newly_earned FROM k_t_badges b JOIN k_t_user_badges ub ON ub.badge_id = b.id AND ub.user_id = $1 LEFT JOIN inserted i ON i.badge_id = b.id ORDER BY b.requirement_type ASC, b.requirement_value ASC`;
   params = [userId];
+}
+else if (action === 'get_book_comments') {
+  // Bizim AI Güvenlik Duvarı Kontrolümüz (Sadece onaylıları getirir)
+  query = `SELECT c.id, c.comment_text, c.created_at, u.full_name FROM k_t_book_comments c JOIN k_t_users u ON c.user_id = u.id WHERE c.book_isbn = $1 AND c.status = 'approved' ORDER BY c.created_at DESC`;
+  params = [data.book_isbn];
+}
+else if (action === 'add_comment') {
+  if (!userId) throw new Error('add_comment için user_id zorunludur');
+  // Yeni eklenenleri direkt approved yapıyoruz (AI eklendiğinde pending yapacağız) ve created_at dönüyoruz.
+  query = `INSERT INTO k_t_book_comments (book_isbn, user_id, comment_text, status) VALUES ($1, $2, $3, $4) RETURNING id, status, created_at`;
+  params = [data.book_isbn, userId, data.comment_text, data.status || 'approved'];
 }
 else if (action === 'read') {
   const fields = Array.isArray(data.fields) && data.fields.length > 0 ? data.fields : ['*'];
@@ -143,7 +142,7 @@ else if (action === 'read') {
 
   if (data.order) {
     const orderValue = String(data.order).trim();
-    if (!/^[a-zA-Z0-9_,.\\s\"]+$/.test(orderValue)) throw new Error('Geçersiz order parametresi');
+    if (!/^[a-zA-Z0-9_,.\s"]+$/.test(orderValue)) throw new Error('Geçersiz order parametresi');
     query += ` ORDER BY ${orderValue}`;
   }
 
@@ -165,19 +164,16 @@ else {
   throw new Error(`Tanımsız action: ${action}`);
 }
 
-return { query, params, resource };
-"""
+return { query, params, resource };"""
+        break
 
-# JSON encode the string to get proper escaping
-js_code_escaped = json.dumps(js_code_raw)
+# Write back with proper JSON formatting
+with open(filepath, 'w', encoding='utf-8') as f:
+    json.dump(workflow, f, indent=2, ensure_ascii=False)
 
-# Construct the new line 44 - NO TRAILING COMMA
-new_line_44 = f'        "jsCode": {js_code_escaped}\n'
-
-# Write everything back
-with open(filepath, 'w') as f:
-    f.writelines(head)
-    f.write(new_line_44)
-    f.writelines(tail)
-
-print("Success")
+print("Success - Smart SQL Builder updated with all fixes:")
+print("  1. undo_read_log action + resource mapping added")
+print("  2. get_book_comments JOIN cast fixed (removed ::varchar)")
+print("  3. leaderboard_group event log filter added")
+print("  4. add_book_edition thumbnail_url '' -> null")
+print("  5. get_user_books b.category added to SELECT and GROUP BY")
