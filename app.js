@@ -880,6 +880,15 @@ function escapeHtml(value) {
         .replace(/'/g, '&#39;');
 }
 
+function escapeJsSingleQuoted(value) {
+    return String(value || '')
+        .replace(/\\/g, '\\\\')
+        .replace(/'/g, "\\'")
+        .replace(/\r?\n/g, ' ')
+        .replace(/\u2028/g, ' ')
+        .replace(/\u2029/g, ' ');
+}
+
 function buildBookCoverHtml(thumbnailUrl, altText, classes = 'w-full h-full object-cover') {
     const safeUrl = String(thumbnailUrl || '').trim();
     const safeAlt = escapeHtml(altText || 'Kitap kapağı');
@@ -1368,7 +1377,7 @@ function startReadingForIsbn(isbn) {
     navigate('student_dashboard');
 }
 
-async function startReadingFromLibrary(isbn, title, author, pageCount) {
+async function startReadingFromLibrary(isbn) {
     if (!isbn) {
         showToast('Bu kitap için ISBN bulunamadı. Lütfen farklı bir baskı seçin.', 'error');
         return;
@@ -2528,12 +2537,11 @@ function handleLibrarySearch(query) {
 }
 
 function renderLibraryBookCard(b) {
-    const safeTitle = String(b.title || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
-    const safeAuthor = String(b.author || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+    const safeIsbn = escapeJsSingleQuoted(b.isbn || '');
     const readCount = Number(b.read_count) || 0;
 
     return `
-        <div class="flex-shrink-0 w-36 sm:w-40 snap-start group cursor-pointer" onclick="openBookDetailModal('${b.isbn}')">
+        <div class="flex-shrink-0 w-36 sm:w-40 snap-start group cursor-pointer" onclick="openBookDetailModal('${safeIsbn}')">
             <div class="relative aspect-[3/4] rounded-2xl overflow-hidden shadow-md group-hover:shadow-xl group-hover:-translate-y-1 transition-all duration-300 border border-gray-100 bg-white">
                 ${buildBookCoverHtml(b.thumbnail_url, b.title, 'w-full h-full object-cover')}
                 
@@ -2542,7 +2550,7 @@ function renderLibraryBookCard(b) {
                 ` : ''}
 
                 <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-3">
-                    <button onclick="event.stopPropagation(); startReadingFromLibrary('${b.isbn || ''}', '${safeTitle}', '${safeAuthor}', ${Number(b.page_count) || 0})" 
+                    <button onclick="event.stopPropagation(); startReadingFromLibrary('${safeIsbn}')" 
                             class="w-full py-2 bg-child-primary text-white text-[11px] font-bold rounded-xl shadow-lg hover:scale-105 transition-transform active:scale-95">
                         HEMEN OKU
                     </button>
@@ -3123,6 +3131,9 @@ function renderBookDetailModalSkeleton(book, isbn) {
 
     const title = book?.title || 'Yükleniyor...';
     const author = book?.author || 'Lütfen bekleyin';
+    const safeIsbn = escapeJsSingleQuoted(isbn || '');
+    const safeTitle = escapeJsSingleQuoted(title);
+    const safeAuthor = escapeJsSingleQuoted(author);
     const coverUrl = book?.thumbnail_url || '';
     const pageCount = Number(book?.page_count) || 0;
     const readCount = Number(book?.read_count) || 0;
@@ -3154,7 +3165,7 @@ function renderBookDetailModalSkeleton(book, isbn) {
         `;
     } else {
         actionButton = `
-            <button onclick="startReadingFromLibrary('${isbn}', '${title.replace(/'/g, "\\'")}', '${author.replace(/'/g, "\\'")}', ${pageCount}); closeBookDetailModal();" 
+            <button onclick="startReadingFromLibrary('${safeIsbn}', '${safeTitle}', '${safeAuthor}', ${pageCount}); closeBookDetailModal();" 
                 class="mt-4 w-full py-3 bg-child-primary text-white font-bold rounded-2xl shadow-lg hover:scale-[1.02] transition-transform active:scale-95 flex items-center justify-center">
                 OKUMAYA BAŞLA
             </button>
